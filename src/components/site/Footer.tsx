@@ -31,9 +31,9 @@ export function Footer() {
         <div>
           <h4 className="text-sm font-semibold text-gold uppercase tracking-wider">For You</h4>
           <ul className="mt-4 space-y-2 text-sm text-cream/80">
-            <li><Link to="/login" className="hover:text-gold">Student portal</Link></li>
+            {/*<li><Link to="/login" className="hover:text-gold">Student portal</Link></li>
             <li><Link to="/login" className="hover:text-gold">Teacher portal</Link></li>
-            <li><Link to="/login" className="hover:text-gold">Admin dashboard</Link></li>
+            <li><Link to="/login" className="hover:text-gold">Admin dashboard</Link></li>*/}
             <li><Link to="/login" className="hover:text-gold">Apply now</Link></li>
           </ul>
         </div>

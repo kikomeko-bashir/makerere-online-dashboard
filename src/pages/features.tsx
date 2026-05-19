@@ -15,18 +15,18 @@ const features = [
   { icon: Video, t: "Live classes", d: "Zoom & Jitsi Meet — one tap to join." },
   { icon: FileText, t: "Timed exams", d: "Practice papers + scheduled mocks." },
   { icon: Award, t: "Certificates", d: "Auto-issued, shareable, verifiable." },
-  { icon: Users, t: "Multi-role access", d: "Admin, teacher, student, sub-admin." },
+  //{ icon: Users, t: "Multi-role access", d: "Admin, teacher, student, sub-admin." },
   { icon: CalendarCheck, t: "Attendance", d: "Daily calendar tracking & reports." },
   { icon: MessageCircle, t: "Doubt clearing", d: "Q&A between students and teachers." },
   { icon: BookOpen, t: "Video lectures", d: "YouTube, Vimeo or self-hosted." },
   { icon: Layers, t: "Multi-course enrollment", d: "Stack as many batches as you want." },
-  { icon: CreditCard, t: "Payments built-in", d: "Razorpay & PayPal supported." },
+  { icon: CreditCard, t: "Payments built-in", d: "#" },
   { icon: Bell, t: "Push notifications", d: "Instant alerts on iOS & Android." },
   { icon: FileCheck, t: "Homework system", d: "Assign, submit, grade, repeat." },
   { icon: BarChart3, t: "Progress charts", d: "See exactly where you stand." },
   { icon: Languages, t: "6 languages", d: "EN, FR, AR, HI, DE, ES." },
   { icon: Smartphone, t: "Mobile apps", d: "Native Android & iOS." },
-  { icon: Shield, t: "Secure & private", d: "Encrypted data, role-based access." },
+  { icon: Shield, t: "Secure & private", d: "Encrypted data." },
   { icon: Globe, t: "Works anywhere", d: "Optimized for slow connections." },
 ];
 
@@ -79,7 +79,7 @@ function Features() {
         </div>
       </section>
 
-      <section className="container-tight py-20 grid md:grid-cols-2 gap-12 items-center">
+      {/*<section className="container-tight py-20 grid md:grid-cols-2 gap-12 items-center">
         <div>
           <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Roles</span>
           <h2 className="mt-3 font-display text-4xl font-bold">Four roles, perfectly defined.</h2>
@@ -101,7 +101,7 @@ function Features() {
           </div>
         </div>
         <img src={books} alt="Books" loading="lazy" className="rounded-2xl shadow-elegant" />
-      </section>
+      </section>*/}
 
       <section className="bg-cream py-20">
         <div className="container-tight grid md:grid-cols-2 gap-12 items-center">
