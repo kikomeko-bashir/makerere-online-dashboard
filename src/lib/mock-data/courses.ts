@@ -1,0 +1,108 @@
+import type { Course } from "@/lib/types";
+
+export const mockCourses: Course[] = [
+  {
+    id: "course-001",
+    title: "Bachelor of Science in Computer Science",
+    description:
+      "A comprehensive program covering algorithms, data structures, software engineering, and artificial intelligence.",
+    schoolId: "school-001",
+    duration: 36,
+    durationUnit: "months",
+    fee: 4500000,
+    passMark: 50,
+    unitIds: ["unit-001", "unit-002", "unit-003"],
+    status: "active",
+  },
+  {
+    id: "course-002",
+    title: "Bachelor of Business Administration",
+    description:
+      "Covers management, marketing, finance, and entrepreneurship for modern business leaders.",
+    schoolId: "school-002",
+    duration: 3,
+    durationUnit: "years",
+    fee: 3800000,
+    passMark: 50,
+    unitIds: ["unit-004", "unit-005"],
+    status: "active",
+  },
+  {
+    id: "course-003",
+    title: "Bachelor of Science in Civil Engineering",
+    description:
+      "Focuses on structural design, construction management, and environmental engineering.",
+    schoolId: "school-003",
+    duration: 48,
+    durationUnit: "months",
+    fee: 5200000,
+    passMark: 55,
+    unitIds: ["unit-006", "unit-007"],
+    status: "active",
+  },
+  {
+    id: "course-004",
+    title: "Diploma in Information Technology",
+    description:
+      "A practical program covering networking, web development, and database management.",
+    schoolId: "school-001",
+    duration: 24,
+    durationUnit: "months",
+    fee: 2800000,
+    passMark: 50,
+    unitIds: ["unit-008"],
+    status: "active",
+  },
+  {
+    id: "course-005",
+    title: "Master of Education",
+    description:
+      "Advanced studies in curriculum development, educational leadership, and research methods.",
+    schoolId: "school-004",
+    duration: 2,
+    durationUnit: "years",
+    fee: 3200000,
+    passMark: 60,
+    unitIds: ["unit-009", "unit-010"],
+    status: "active",
+  },
+  {
+    id: "course-006",
+    title: "Bachelor of Laws (LLB)",
+    description:
+      "Covers constitutional law, criminal law, commercial law, and international law.",
+    schoolId: "school-005",
+    duration: 4,
+    durationUnit: "years",
+    fee: 4800000,
+    passMark: 50,
+    unitIds: ["unit-011"],
+    status: "active",
+  },
+  {
+    id: "course-007",
+    title: "Certificate in Data Science",
+    description:
+      "Short course covering Python, statistics, machine learning, and data visualization.",
+    schoolId: "school-001",
+    duration: 6,
+    durationUnit: "months",
+    fee: 1500000,
+    passMark: 50,
+    unitIds: ["unit-012"],
+    status: "active",
+  },
+  {
+    id: "course-008",
+    title: "Diploma in Accounting and Finance",
+    description:
+      "Practical training in bookkeeping, financial reporting, and taxation.",
+    schoolId: "school-002",
+    duration: 18,
+    durationUnit: "months",
+    fee: 2500000,
+    passMark: 50,
+    unitIds: [],
+    status: "inactive",
+  },
+];

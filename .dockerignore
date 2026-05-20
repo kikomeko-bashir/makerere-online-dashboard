@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.gitignore
+.vscode
+.kiro
+*.md
+.prettierrc
+.prettierignore
+eslint.config.js
+package-lock.json

@@ -1,0 +1,6 @@
+services:
+  makerere-dashboard:
+    build: .
+    ports:
+      - "3535:3535"
+    restart: unless-stopped
