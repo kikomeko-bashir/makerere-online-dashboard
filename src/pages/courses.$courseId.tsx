@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { Link, useParams } from "react-router-dom";
 import { Clock, Users, Star, PlayCircle, FileText, Award, CheckCircle2, Globe, Calendar, ArrowLeft } from "lucide-react";
 import lab from "@/assets/lab.jpg";
 import books from "@/assets/books.jpg";
@@ -106,28 +106,19 @@ const COURSES: Record<string, Course> = {
   },
 };
 
-export const Route = createFileRoute("/courses/$courseId")({
-  loader: ({ params }) => {
-    const c = COURSES[params.courseId];
-    if (!c) throw notFound();
-    return c;
-  },
-  component: CoursePage,
-  notFoundComponent: () => (
-    <div className="container-tight py-24 text-center">
-      <h1 className="font-display text-4xl font-bold">Course not found</h1>
-      <Link to="/courses" className="mt-4 inline-block text-primary font-semibold">Back to catalog</Link>
-    </div>
-  ),
-  errorComponent: ({ error }) => (
-    <div className="container-tight py-24 text-center">
-      <p className="text-muted-foreground">{error.message}</p>
-    </div>
-  ),
-});
+export default function CoursePage() {
+  const { courseId } = useParams<{ courseId: string }>();
+  const c = courseId ? COURSES[courseId] : undefined;
 
-function CoursePage() {
-  const c = Route.useLoaderData() as Course;
+  if (!c) {
+    return (
+      <div className="container-tight py-24 text-center">
+        <h1 className="font-display text-4xl font-bold">Course not found</h1>
+        <Link to="/courses" className="mt-4 inline-block text-primary font-semibold">Back to catalog</Link>
+      </div>
+    );
+  }
+
   const totalLessons = c.chapters.reduce((s, ch) => s + ch.lessons, 0);
 
   return (

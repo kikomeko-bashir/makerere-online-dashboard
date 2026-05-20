@@ -1,15 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Target, Eye, Heart, Users } from "lucide-react";
+import { Target, Eye, Heart } from "lucide-react";
 import heroCampus from "@/assets/hero-campus.jpg";
 import graduation from "@/assets/graduation.jpg";
 import studentsGroup from "@/assets/students-group.jpg";
 import lab from "@/assets/lab.jpg";
 
-export const Route = createFileRoute("/about")({
-  component: About,
-});
-
-function About() {
+export default function About() {
   return (
     <>
       <section className="relative h-[60vh] min-h-[420px] overflow-hidden">

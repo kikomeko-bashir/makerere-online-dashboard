@@ -1,11 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { Mail, Phone, MapPin, Clock } from "lucide-react";
 
-export const Route = createFileRoute("/contact")({
-  component: Contact,
-});
-
-function Contact() {
+export default function Contact() {
   return (
     <>
       <section className="bg-hero-gradient py-20">

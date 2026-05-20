@@ -1,11 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import heroCampus from "@/assets/hero-campus.jpg";
 
-export const Route = createFileRoute("/login")({
-  component: Login,
-});
-
-function Login() {
+export default function Login() {
   return (
     <section className="relative min-h-[calc(100vh-4rem)] grid lg:grid-cols-2">
       <div className="relative hidden lg:block">

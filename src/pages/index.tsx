@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import {
   GraduationCap, Video, FileText, Users, Award, CalendarCheck,
   PlayCircle, ArrowRight, CheckCircle2, Sparkles, Globe, MessageCircle,
@@ -12,11 +12,7 @@ import lab from "@/assets/lab.jpg";
 import books from "@/assets/books.jpg";
 import liveClass from "@/assets/live-class.jpg";
 
-export const Route = createFileRoute("/")({
-  component: Home,
-});
-
-function Home() {
+export default function Home() {
   return (
     <>
       {/* HERO */}

@@ -1,9 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { Users, BookOpen, MessageSquare, Star, Video, Upload, ClipboardCheck, Plus } from "lucide-react";
-
-export const Route = createFileRoute("/dashboard/teacher")({
-  component: TeacherDash,
-});
 
 const stats = [
   { l: "Active students", v: "428", i: Users },
@@ -12,7 +7,7 @@ const stats = [
   { l: "Avg. rating", v: "4.9", i: Star },
 ];
 
-function TeacherDash() {
+export default function TeacherDash() {
   return (
     <div className="container-tight py-10 space-y-10">
       <header className="flex flex-wrap items-end justify-between gap-4">

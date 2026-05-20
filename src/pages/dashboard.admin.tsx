@@ -1,9 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { Users, GraduationCap, BookOpen, DollarSign, Activity, ShieldCheck, AlertTriangle, CheckCircle2 } from "lucide-react";
-
-export const Route = createFileRoute("/dashboard/admin")({
-  component: AdminDash,
-});
 
 const kpis = [
   { l: "Total students", v: "24,812", d: "+312 this week", i: GraduationCap },
@@ -12,7 +7,7 @@ const kpis = [
   { l: "Revenue (UGX)", v: "184.2M", d: "+18% MoM", i: DollarSign },
 ];
 
-function AdminDash() {
+export default function AdminDash() {
   return (
     <div className="container-tight py-10 space-y-10">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -49,7 +44,7 @@ function AdminDash() {
           <div className="mt-6 flex items-end gap-2 h-44">
             {[34, 42, 38, 56, 48, 61, 72, 65, 80, 92, 88, 104].map((v, i) => (
               <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full rounded-t-md bg-gradient-to-t from-primary to-[oklch(0.62_0.2_25)]" style={{ height: `${v}%` }} />
+                <div className="w-full rounded-t-md bg-linear-to-t from-primary to-[oklch(0.62_0.2_25)]" style={{ height: `${v}%` }} />
                 <span className="text-[10px] text-muted-foreground">W{i + 1}</span>
               </div>
             ))}

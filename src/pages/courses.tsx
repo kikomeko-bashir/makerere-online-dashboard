@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { Clock, Users, Star } from "lucide-react";
 import lab from "@/assets/lab.jpg";
 import books from "@/assets/books.jpg";
@@ -6,10 +6,6 @@ import teacherOnline from "@/assets/teacher-online.jpg";
 import studentLearning from "@/assets/student-learning.jpg";
 import studentsGroup from "@/assets/students-group.jpg";
 import liveClass from "@/assets/live-class.jpg";
-
-export const Route = createFileRoute("/courses")({
-  component: Courses,
-});
 
 const courses = [
   { img: lab, cat: "Science", title: "Physics 101 — Mechanics & Optics", price: "Free", duration: "12 weeks", students: 1240, rating: 4.9 },
@@ -22,7 +18,7 @@ const courses = [
 
 const categories = ["All", "Science", "Technology", "Business", "Arts", "Health"];
 
-function Courses() {
+export default function Courses() {
   return (
     <>
       <section className="bg-hero-gradient py-20">

@@ -1,21 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
 import {
-  Video, FileText, Award, Users, CalendarCheck, MessageCircle, Globe,
+  Video, FileText, Award, CalendarCheck, MessageCircle, Globe,
   CreditCard, Bell, BookOpen, Layers, Shield, Smartphone, FileCheck, BarChart3, Languages
 } from "lucide-react";
 import liveClass from "@/assets/live-class.jpg";
-import books from "@/assets/books.jpg";
 import teacherOnline from "@/assets/teacher-online.jpg";
-
-export const Route = createFileRoute("/features")({
-  component: Features,
-});
 
 const features = [
   { icon: Video, t: "Live classes", d: "Zoom & Jitsi Meet — one tap to join." },
   { icon: FileText, t: "Timed exams", d: "Practice papers + scheduled mocks." },
   { icon: Award, t: "Certificates", d: "Auto-issued, shareable, verifiable." },
-  //{ icon: Users, t: "Multi-role access", d: "Admin, teacher, student, sub-admin." },
   { icon: CalendarCheck, t: "Attendance", d: "Daily calendar tracking & reports." },
   { icon: MessageCircle, t: "Doubt clearing", d: "Q&A between students and teachers." },
   { icon: BookOpen, t: "Video lectures", d: "YouTube, Vimeo or self-hosted." },
@@ -30,7 +23,7 @@ const features = [
   { icon: Globe, t: "Works anywhere", d: "Optimized for slow connections." },
 ];
 
-function Features() {
+export default function Features() {
   return (
     <>
       <section className="bg-hero-gradient py-20">
@@ -78,30 +71,6 @@ function Features() {
           </div>
         </div>
       </section>
-
-      {/*<section className="container-tight py-20 grid md:grid-cols-2 gap-12 items-center">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Roles</span>
-          <h2 className="mt-3 font-display text-4xl font-bold">Four roles, perfectly defined.</h2>
-          <div className="mt-8 space-y-4">
-            {[
-              { r: "Super Admin", d: "Owns the platform — manages everything and everyone." },
-              { r: "Sub Admin", d: "Runs their own institute within the platform." },
-              { r: "Teacher", d: "Manages classes, content, exams for assigned subjects." },
-              { r: "Student", d: "Learns, takes exams, attends classes, tracks progress." },
-            ].map((row) => (
-              <div key={row.r} className="flex gap-4 rounded-lg border border-border bg-card p-4">
-                <div className="h-10 w-1 rounded-full bg-gold-gradient" />
-                <div>
-                  <p className="font-semibold">{row.r}</p>
-                  <p className="text-sm text-muted-foreground">{row.d}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <img src={books} alt="Books" loading="lazy" className="rounded-2xl shadow-elegant" />
-      </section>*/}
 
       <section className="bg-cream py-20">
         <div className="container-tight grid md:grid-cols-2 gap-12 items-center">

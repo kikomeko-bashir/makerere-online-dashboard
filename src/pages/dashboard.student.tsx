@@ -1,12 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { BookOpen, Clock, Trophy, Calendar, PlayCircle, FileCheck2, Video, TrendingUp } from "lucide-react";
 import lab from "@/assets/lab.jpg";
 import liveClass from "@/assets/live-class.jpg";
 import books from "@/assets/books.jpg";
-
-export const Route = createFileRoute("/dashboard/student")({
-  component: StudentDash,
-});
 
 const stats = [
   { l: "Enrolled courses", v: "6", i: BookOpen },
@@ -27,7 +23,7 @@ const schedule = [
   { t: "Tomorrow", title: "Physics Lab Simulation", teacher: "Prof. David Okello" },
 ];
 
-function StudentDash() {
+export default function StudentDash() {
   return (
     <div className="container-tight py-10 space-y-10">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -60,7 +56,7 @@ function StudentDash() {
               <div key={c.id} className="flex gap-4 items-center">
                 <img src={c.img} alt="" className="h-16 w-24 rounded-md object-cover" />
                 <div className="flex-1 min-w-0">
-                  <Link to="/courses/$courseId" params={{ courseId: c.id }} className="font-semibold truncate hover:text-primary">{c.title}</Link>
+                  <Link to={`/courses/${c.id}`} className="font-semibold truncate hover:text-primary">{c.title}</Link>
                   <div className="text-xs text-muted-foreground mt-0.5">Next: {c.next}</div>
                   <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
                     <div className="h-full bg-primary rounded-full" style={{ width: `${c.progress}%` }} />

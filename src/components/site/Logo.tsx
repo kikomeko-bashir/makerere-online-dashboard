@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import crest from "@/assets/makerere-logo.png";
 
 export function Logo({ light = false }: { light?: boolean }) {

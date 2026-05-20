@@ -1,18 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { GraduationCap, ArrowRight, Check } from "lucide-react";
 import studentsGroup from "@/assets/students-group.jpg";
-
-export const Route = createFileRoute("/get-started")({
-  component: GetStarted,
-});
 
 const steps = [
   { n: 1, t: "Your details", d: "Tell us about yourself to create your account." },
   { n: 2, t: "Confirm", d: "Review and submit your registration." },
 ];
 
-function GetStarted() {
+export default function GetStarted() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
 

@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Logo } from "./Logo";
@@ -13,22 +13,28 @@ const nav = [
 
 export function Header() {
   const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-background/85 border-b border-border">
       <div className="container-tight flex h-16 items-center justify-between">
         <Logo />
         <nav className="hidden md:flex items-center gap-1">
-          {nav.map((n) => (
-            <Link
-              key={n.to}
-              to={n.to}
-              className="px-3 py-2 text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
-              activeProps={{ className: "px-3 py-2 text-sm font-semibold text-primary" }}
-              activeOptions={{ exact: n.to === "/" }}
-            >
-              {n.label}
-            </Link>
-          ))}
+          {nav.map((n) => {
+            const isActive = n.to === "/" ? pathname === "/" : pathname.startsWith(n.to);
+            return (
+              <Link
+                key={n.to}
+                to={n.to}
+                className={isActive
+                  ? "px-3 py-2 text-sm font-semibold text-primary"
+                  : "px-3 py-2 text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+                }
+              >
+                {n.label}
+              </Link>
+            );
+          })}
         </nav>
         <div className="hidden md:flex items-center gap-2">
           <Link
