@@ -9,6 +9,7 @@ const nav = [
   { to: "/courses", label: "Courses" },
   { to: "/features", label: "Features" },
   { to: "/contact", label: "Contact" },
+  { to: "/certificate-verification", label: "Verify Certificate" },
 ] as const;
 
 export function Header() {

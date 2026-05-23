@@ -21,56 +21,56 @@ const CertificateVerification = React.lazy(
 );
 
 // Dashboard pages
-const DashboardOverview = React.lazy(() => import("@/pages/dashboard.index"));
-const DashboardSchools = React.lazy(() => import("@/pages/dashboard.schools"));
-const DashboardCourses = React.lazy(() => import("@/pages/dashboard.courses"));
+const DashboardOverview = React.lazy(() => import("@/pages/dashboard/index"));
+const DashboardSchools = React.lazy(() => import("@/pages/dashboard/admin/schools"));
+const DashboardCourses = React.lazy(() => import("@/pages/dashboard/admin/courses"));
 const DashboardCourseDetail = React.lazy(
-  () => import("@/pages/dashboard.courses.$courseId"),
+  () => import("@/pages/dashboard/admin/courses.$courseId"),
 );
 const DashboardCourseUnits = React.lazy(
-  () => import("@/pages/dashboard.course-units"),
+  () => import("@/pages/dashboard/admin/course-units"),
 );
-const DashboardIntakes = React.lazy(() => import("@/pages/dashboard.intakes"));
+const DashboardIntakes = React.lazy(() => import("@/pages/dashboard/admin/intakes"));
 const DashboardIntakeDetail = React.lazy(
-  () => import("@/pages/dashboard.intakes.$intakeId"),
+  () => import("@/pages/dashboard/admin/intakes.$intakeId"),
 );
 const DashboardEnrollment = React.lazy(
-  () => import("@/pages/dashboard.enrollment"),
+  () => import("@/pages/dashboard/admin/enrollment"),
 );
 const DashboardMaterials = React.lazy(
-  () => import("@/pages/dashboard.materials"),
+  () => import("@/pages/dashboard/lecturer/materials"),
 );
 const DashboardVirtualLearning = React.lazy(
-  () => import("@/pages/dashboard.virtual-learning"),
+  () => import("@/pages/dashboard/lecturer/virtual-learning"),
 );
 const DashboardExaminations = React.lazy(
-  () => import("@/pages/dashboard.examinations"),
+  () => import("@/pages/dashboard/lecturer/examinations"),
 );
 const DashboardExamDetail = React.lazy(
-  () => import("@/pages/dashboard.examinations.$examId"),
+  () => import("@/pages/dashboard/lecturer/examinations.$examId"),
 );
 const DashboardCertificates = React.lazy(
-  () => import("@/pages/dashboard.certificates"),
+  () => import("@/pages/dashboard/admin/certificates"),
 );
 const DashboardPayments = React.lazy(
-  () => import("@/pages/dashboard.payments"),
+  () => import("@/pages/dashboard/admin/payments"),
 );
 const DashboardTutoring = React.lazy(
-  () => import("@/pages/dashboard.tutoring"),
+  () => import("@/pages/dashboard/lecturer/tutoring"),
 );
 const DashboardNotifications = React.lazy(
-  () => import("@/pages/dashboard.notifications"),
+  () => import("@/pages/dashboard/lecturer/notifications"),
 );
 const DashboardReporting = React.lazy(
-  () => import("@/pages/dashboard.reporting"),
+  () => import("@/pages/dashboard/admin/reporting"),
 );
 const DashboardSettings = React.lazy(
-  () => import("@/pages/dashboard.settings"),
+  () => import("@/pages/dashboard/admin/settings"),
 );
-const DashboardAdmins = React.lazy(() => import("@/pages/dashboard.admins"));
-const DashboardStudent = React.lazy(() => import("@/pages/dashboard.student"));
-const DashboardTeacher = React.lazy(() => import("@/pages/dashboard.teacher"));
-const DashboardAdmin = React.lazy(() => import("@/pages/dashboard.admin"));
+const DashboardAdmins = React.lazy(() => import("@/pages/dashboard/admin/admins"));
+const DashboardStudent = React.lazy(() => import("@/pages/dashboard/legacy/student"));
+const DashboardTeacher = React.lazy(() => import("@/pages/dashboard/legacy/teacher"));
+const DashboardAdmin = React.lazy(() => import("@/pages/dashboard/legacy/admin"));
 
 function Loading() {
   return (
