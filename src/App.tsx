@@ -96,19 +96,17 @@ function RootLayout() {
 
 function DashboardLayout() {
   return (
-    <AuthProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <DashboardHeader />
-          <div className="flex-1 overflow-auto p-4 md:p-6">
-            <Suspense fallback={<Loading />}>
-              <Outlet />
-            </Suspense>
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
-    </AuthProvider>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <DashboardHeader />
+        <div className="flex-1 overflow-auto p-4 md:p-6">
+          <Suspense fallback={<Loading />}>
+            <Outlet />
+          </Suspense>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
@@ -158,8 +156,9 @@ function DashboardNotFound() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
         <Route element={<RootLayout />}>
           <Route index element={<Home />} />
           <Route path="about" element={<About />} />
@@ -204,6 +203,7 @@ export default function App() {
           <Route path="*" element={<DashboardNotFound />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }

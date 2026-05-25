@@ -1,7 +1,6 @@
-import { useLocation } from "react-router-dom";
-import { Bell } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Bell, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import type { UserRole } from "@/lib/types";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -11,22 +10,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-
-const roles: { value: UserRole; label: string }[] = [
-  { value: "super_admin", label: "Super Admin" },
-  { value: "admin", label: "Admin" },
-  { value: "lecturer", label: "Lecturer" },
-  { value: "student", label: "Student" },
-];
 
 function buildBreadcrumbs(pathname: string) {
   const segments = pathname
@@ -47,8 +31,9 @@ function buildBreadcrumbs(pathname: string) {
 }
 
 export function DashboardHeader() {
-  const { user, setRole } = useAuth();
+  const { user, logout } = useAuth();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const crumbs = buildBreadcrumbs(pathname);
 
   // Mock unread notification count
@@ -71,28 +56,6 @@ export function DashboardHeader() {
       </Breadcrumb>
 
       <div className="flex items-center gap-2">
-        {/* Role Switcher (dev tool) */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-8 text-xs">
-              {user.role.replace("_", " ")}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {roles.map((role) => (
-              <DropdownMenuItem
-                key={role.value}
-                onClick={() => setRole(role.value)}
-                className={user.role === role.value ? "bg-accent" : ""}
-              >
-                {role.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {/* Notification Bell */}
         <Button variant="ghost" size="icon" className="relative h-8 w-8">
           <Bell className="h-4 w-4" />
@@ -102,6 +65,17 @@ export function DashboardHeader() {
             </span>
           )}
           <span className="sr-only">Notifications</span>
+        </Button>
+
+        {/* Logout */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => { logout(); navigate("/login"); }}
+        >
+          <LogOut className="h-4 w-4" />
+          <span className="sr-only">Sign out</span>
         </Button>
       </div>
     </header>

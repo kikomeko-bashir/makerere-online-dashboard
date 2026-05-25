@@ -1,11 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import type { User, UserRole } from "@/lib/types";
-import { mockUsers } from "@/lib/mock-data";
+import type { UserRole } from "@/lib/types";
+import { api, type ApiUser } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DataTable, type ColumnDef } from "@/components/dashboard/data-table";
 import { EntityFormDialog } from "@/components/dashboard/entity-form-dialog";
@@ -28,49 +29,82 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const adminSchema = z.object({
+const userSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Valid email is required"),
-  role: z.enum(["admin", "super_admin"]),
+  role: z.enum(["super_admin", "admin", "lecturer", "student"]),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-type AdminFormData = z.infer<typeof adminSchema>;
+type UserFormData = z.infer<typeof userSchema>;
 
-const emptyForm: AdminFormData = {
+const emptyForm: UserFormData = {
   name: "",
   email: "",
-  role: "admin",
+  role: "student",
   password: "",
 };
 
 export default function DashboardAdmins() {
-  const [admins, setAdmins] = useState<User[]>(
-    mockUsers.filter(
-      (u) => u.role === "admin" || u.role === "super_admin",
-    ),
-  );
+  const { user: currentUser } = useAuth();
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [editingAdmin, setEditingAdmin] = useState<User | null>(null);
-  const [deletingAdmin, setDeletingAdmin] = useState<User | null>(null);
-  const [formData, setFormData] = useState<AdminFormData>(emptyForm);
-  const [errors, setErrors] = useState<
-    Partial<Record<keyof AdminFormData, string>>
+  const [deletingUser, setDeletingUser] = useState<ApiUser | null>(null);
+  const [formData, setFormData] = useState<UserFormData>(emptyForm);
+  const [formErrors, setFormErrors] = useState<
+    Partial<Record<keyof UserFormData, string>>
   >({});
+  const [submitting, setSubmitting] = useState(false);
 
-  const getRoleBadge = (role: UserRole) => {
+  const isSuperAdmin = currentUser.role === "super_admin";
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.getUsers();
+      setUsers(data);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to fetch users";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const getRoleBadge = (role: string) => {
     switch (role) {
       case "super_admin":
         return <Badge variant="default">Super Admin</Badge>;
       case "admin":
         return <Badge variant="secondary">Admin</Badge>;
+      case "lecturer":
+        return (
+          <Badge variant="outline" className="border-blue-300 text-blue-700">
+            Lecturer
+          </Badge>
+        );
+      case "student":
+        return (
+          <Badge variant="outline" className="border-green-300 text-green-700">
+            Student
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{role}</Badge>;
     }
   };
 
-  const columns: ColumnDef<User>[] = [
+  const columns: ColumnDef<ApiUser>[] = [
     { key: "name", header: "Name" },
     { key: "email", header: "Email" },
     {
@@ -79,168 +113,182 @@ export default function DashboardAdmins() {
       render: (row) => getRoleBadge(row.role),
     },
     {
-      key: "createdAt",
+      key: "created_at",
       header: "Created At",
-      render: (row) => format(new Date(row.createdAt), "dd MMM yyyy"),
+      render: (row) => format(new Date(row.created_at), "dd MMM yyyy"),
     },
   ];
 
+  const roleOptions: { value: UserRole; label: string }[] = isSuperAdmin
+    ? [
+        { value: "super_admin", label: "Super Admin" },
+        { value: "admin", label: "Admin" },
+        { value: "lecturer", label: "Lecturer" },
+        { value: "student", label: "Student" },
+      ]
+    : [
+        { value: "admin", label: "Admin" },
+        { value: "lecturer", label: "Lecturer" },
+        { value: "student", label: "Student" },
+      ];
+
   const openCreateForm = () => {
-    setEditingAdmin(null);
     setFormData(emptyForm);
-    setErrors({});
+    setFormErrors({});
     setFormOpen(true);
   };
 
-  const openEditForm = (admin: User) => {
-    setEditingAdmin(admin);
-    setFormData({
-      name: admin.name,
-      email: admin.email,
-      role: admin.role as "admin" | "super_admin",
-      password: "",
-    });
-    setErrors({});
-    setFormOpen(true);
-  };
-
-  const openDeleteDialog = (admin: User) => {
-    setDeletingAdmin(admin);
+  const openDeleteDialog = (user: ApiUser) => {
+    setDeletingUser(user);
     setDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
-    const schema = editingAdmin
-      ? adminSchema.extend({
-          password: z
-            .string()
-            .optional()
-            .refine(
-              (val) => !val || val.length >= 6,
-              "Password must be at least 6 characters",
-            ),
-        })
-      : adminSchema;
-
-    const result = schema.safeParse(formData);
+  const handleSubmit = async () => {
+    const result = userSchema.safeParse(formData);
     if (!result.success) {
-      const fieldErrors: Partial<Record<keyof AdminFormData, string>> = {};
+      const fieldErrors: Partial<Record<keyof UserFormData, string>> = {};
       result.error.errors.forEach((err) => {
-        const field = err.path[0] as keyof AdminFormData;
+        const field = err.path[0] as keyof UserFormData;
         fieldErrors[field] = err.message;
       });
-      setErrors(fieldErrors);
+      setFormErrors(fieldErrors);
       return;
     }
 
-    if (editingAdmin) {
-      setAdmins((prev) =>
-        prev.map((a) =>
-          a.id === editingAdmin.id
-            ? { ...a, name: result.data.name, email: result.data.email, role: result.data.role as UserRole }
-            : a,
-        ),
+    try {
+      setSubmitting(true);
+      await api.createUser(
+        result.data.name,
+        result.data.email,
+        result.data.password,
+        result.data.role,
       );
-      toast.success("Admin updated successfully");
-    } else {
-      const newAdmin: User = {
-        id: `user-${Date.now()}`,
-        name: result.data.name,
-        email: result.data.email,
-        role: result.data.role as UserRole,
-        avatar: undefined,
-        createdAt: new Date().toISOString(),
-      };
-      setAdmins((prev) => [...prev, newAdmin]);
-      toast.success("Admin created successfully");
+      toast.success("User created successfully");
+      setFormOpen(false);
+      await fetchUsers();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to create user";
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
     }
-    setFormOpen(false);
   };
 
-  const handleDelete = () => {
-    if (deletingAdmin) {
-      setAdmins((prev) => prev.filter((a) => a.id !== deletingAdmin.id));
-      toast.success("Admin deleted successfully");
+  const handleDelete = async () => {
+    if (!deletingUser) return;
+    try {
+      await api.deleteUser(deletingUser.id);
+      toast.success("User deleted successfully");
       setDeleteOpen(false);
-      setDeletingAdmin(null);
+      setDeletingUser(null);
+      await fetchUsers();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to delete user";
+      toast.error(message);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="User Management"
+          description="Manage all user accounts and permissions."
+        />
+        <div className="rounded-2xl border border-destructive/50 bg-destructive/10 p-6 text-center">
+          <p className="text-destructive">{error}</p>
+          <Button variant="outline" className="mt-4" onClick={fetchUsers}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Admin Management"
-        description="Manage administrator accounts and permissions."
+        title="User Management"
+        description="Manage all user accounts and permissions."
       >
         <Button onClick={openCreateForm}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Admin
+          Add User
         </Button>
       </PageHeader>
 
       <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
         <DataTable<Record<string, unknown>>
           columns={columns as unknown as ColumnDef<Record<string, unknown>>[]}
-          data={admins as unknown as Record<string, unknown>[]}
+          data={users as unknown as Record<string, unknown>[]}
           searchableFields={["name", "email"]}
-          searchPlaceholder="Search admins..."
-          rowActions={(row) => {
-            const admin = row as unknown as User;
-            return (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => openEditForm(admin)}>
-                    Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={() => openDeleteDialog(admin)}
-                  >
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            );
-          }}
+          searchPlaceholder="Search users..."
+          rowActions={
+            isSuperAdmin
+              ? (row) => {
+                  const user = row as unknown as ApiUser;
+                  // Don't show delete for the current user
+                  if (user.id === currentUser.id) return null;
+                  return (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => openDeleteDialog(user)}
+                        >
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                }
+              : undefined
+          }
         />
       </div>
 
       <EntityFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
-        title={editingAdmin ? "Edit Admin" : "Add Admin"}
-        description={
-          editingAdmin
-            ? "Update administrator details."
-            : "Create a new administrator account."
-        }
+        title="Add User"
+        description="Create a new user account."
         onSubmit={handleSubmit}
       >
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="admin-name">Name</Label>
+            <Label htmlFor="user-name">Name</Label>
             <Input
-              id="admin-name"
+              id="user-name"
               value={formData.name}
               onChange={(e) =>
                 setFormData((f) => ({ ...f, name: e.target.value }))
               }
               placeholder="Full name"
             />
-            {errors.name && (
-              <p className="text-xs text-destructive">{errors.name}</p>
+            {formErrors.name && (
+              <p className="text-xs text-destructive">{formErrors.name}</p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="admin-email">Email</Label>
+            <Label htmlFor="user-email">Email</Label>
             <Input
-              id="admin-email"
+              id="user-email"
               type="email"
               value={formData.email}
               onChange={(e) =>
@@ -248,8 +296,24 @@ export default function DashboardAdmins() {
               }
               placeholder="email@mak.ac.ug"
             />
-            {errors.email && (
-              <p className="text-xs text-destructive">{errors.email}</p>
+            {formErrors.email && (
+              <p className="text-xs text-destructive">{formErrors.email}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="user-password">Password</Label>
+            <Input
+              id="user-password"
+              type="password"
+              value={formData.password}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, password: e.target.value }))
+              }
+              placeholder="Min 6 characters"
+            />
+            {formErrors.password && (
+              <p className="text-xs text-destructive">{formErrors.password}</p>
             )}
           </div>
 
@@ -260,7 +324,7 @@ export default function DashboardAdmins() {
               onValueChange={(val) =>
                 setFormData((f) => ({
                   ...f,
-                  role: val as "admin" | "super_admin",
+                  role: val as UserFormData["role"],
                 }))
               }
             >
@@ -268,27 +332,15 @@ export default function DashboardAdmins() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="super_admin">Super Admin</SelectItem>
+                {roleOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="admin-password">
-              Password{editingAdmin ? " (leave blank to keep current)" : ""}
-            </Label>
-            <Input
-              id="admin-password"
-              type="password"
-              value={formData.password}
-              onChange={(e) =>
-                setFormData((f) => ({ ...f, password: e.target.value }))
-              }
-              placeholder={editingAdmin ? "••••••••" : "Min 6 characters"}
-            />
-            {errors.password && (
-              <p className="text-xs text-destructive">{errors.password}</p>
+            {formErrors.role && (
+              <p className="text-xs text-destructive">{formErrors.role}</p>
             )}
           </div>
         </div>
@@ -297,8 +349,8 @@ export default function DashboardAdmins() {
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="Delete Admin"
-        description={`Are you sure you want to delete "${deletingAdmin?.name}"? This action cannot be undone.`}
+        title="Delete User"
+        description={`Are you sure you want to delete "${deletingUser?.name}"? This action cannot be undone.`}
         confirmLabel="Delete"
         onConfirm={handleDelete}
         destructive

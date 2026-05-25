@@ -61,7 +61,7 @@ function getSuperAdminNavigation(): NavGroup[] {
       label: "Administration",
       items: [
         {
-          title: "Admin Management",
+          title: "User Management",
           href: "/dashboard/admins",
           icon: UserCog,
         },
@@ -125,6 +125,11 @@ function getAdminNavigation(): NavGroup[] {
     {
       label: "Academic",
       items: [
+        {
+          title: "User Management",
+          href: "/dashboard/admins",
+          icon: UserCog,
+        },
         {
           title: "School Management",
           href: "/dashboard/schools",

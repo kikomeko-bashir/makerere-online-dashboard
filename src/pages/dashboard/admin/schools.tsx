@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { MoreHorizontal, Plus, School as SchoolIcon } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MoreHorizontal, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import type { School } from "@/lib/types";
-import { mockSchools, mockUsers } from "@/lib/mock-data";
+import { api, type ApiSchool, type ApiUser } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DataTable, type ColumnDef } from "@/components/dashboard/data-table";
 import { EntityFormDialog } from "@/components/dashboard/entity-form-dialog";
@@ -32,7 +32,8 @@ const schoolSchema = z.object({
   name: z.string().min(1, "School name is required"),
   code: z.string().min(1, "Code is required").max(10, "Code must be 10 characters or less"),
   description: z.string().optional(),
-  headOfSchool: z.string().min(1, "Head of School is required"),
+  head_of_school: z.string().optional(),
+  departments_count: z.number().min(0, "Must be 0 or more"),
   status: z.enum(["active", "inactive"]),
 });
 
@@ -42,43 +43,66 @@ const emptyForm: SchoolFormData = {
   name: "",
   code: "",
   description: "",
-  headOfSchool: "",
+  head_of_school: "",
+  departments_count: 0,
   status: "active",
 };
 
 export default function DashboardSchools() {
-  const [schools, setSchools] = useState<School[]>([...mockSchools]);
+  const { user } = useAuth();
+  const [schools, setSchools] = useState<ApiSchool[]>([]);
+  const [staffUsers, setStaffUsers] = useState<ApiUser[]>([]);
+  const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [editingSchool, setEditingSchool] = useState<School | null>(null);
-  const [deletingSchool, setDeletingSchool] = useState<School | null>(null);
+  const [editingSchool, setEditingSchool] = useState<ApiSchool | null>(null);
+  const [deletingSchool, setDeletingSchool] = useState<ApiSchool | null>(null);
   const [formData, setFormData] = useState<SchoolFormData>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<keyof SchoolFormData, string>>>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  const lecturers = mockUsers.filter(
-    (u) => u.role === "lecturer" || u.role === "admin" || u.role === "super_admin",
-  );
+  const isSuperAdmin = user.role === "super_admin";
 
-  const getUserName = (userId: string) => {
-    const user = mockUsers.find((u) => u.id === userId);
-    return user?.name ?? "Unknown";
+  const fetchSchools = async () => {
+    try {
+      setLoading(true);
+      const [schoolsData, usersData] = await Promise.all([
+        api.getSchools(),
+        api.getUsers(),
+      ]);
+      setSchools(schoolsData);
+      setStaffUsers(usersData.filter((u) => u.role === "lecturer" || u.role === "admin" || u.role === "super_admin"));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load schools";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const columns: ColumnDef<School>[] = [
+  useEffect(() => {
+    fetchSchools();
+  }, []);
+
+  const columns: ColumnDef<Record<string, unknown>>[] = [
     { key: "name", header: "Name" },
     { key: "code", header: "Code" },
     {
-      key: "headOfSchool",
+      key: "head_of_school",
       header: "Head of School",
-      render: (row) => getUserName(row.headOfSchool),
+      render: (row) => {
+        const userId = row.head_of_school as string;
+        const found = staffUsers.find((u) => u.id === userId);
+        return found ? found.name : (userId || "—");
+      },
     },
-    { key: "departmentsCount", header: "Departments" },
+    { key: "departments_count", header: "Departments" },
     {
       key: "status",
       header: "Status",
       render: (row) => (
         <Badge variant={row.status === "active" ? "default" : "secondary"}>
-          {row.status}
+          {row.status as string}
         </Badge>
       ),
     },
@@ -91,25 +115,26 @@ export default function DashboardSchools() {
     setFormOpen(true);
   };
 
-  const openEditForm = (school: School) => {
+  const openEditForm = (school: ApiSchool) => {
     setEditingSchool(school);
     setFormData({
       name: school.name,
       code: school.code,
-      description: school.description,
-      headOfSchool: school.headOfSchool,
-      status: school.status,
+      description: school.description || "",
+      head_of_school: school.head_of_school || "",
+      departments_count: school.departments_count,
+      status: school.status as "active" | "inactive",
     });
     setErrors({});
     setFormOpen(true);
   };
 
-  const openDeleteDialog = (school: School) => {
+  const openDeleteDialog = (school: ApiSchool) => {
     setDeletingSchool(school);
     setDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const result = schoolSchema.safeParse(formData);
     if (!result.success) {
       const fieldErrors: Partial<Record<keyof SchoolFormData, string>> = {};
@@ -121,39 +146,55 @@ export default function DashboardSchools() {
       return;
     }
 
-    if (editingSchool) {
-      setSchools((prev) =>
-        prev.map((s) =>
-          s.id === editingSchool.id
-            ? { ...s, ...result.data, description: result.data.description ?? "" }
-            : s,
-        ),
-      );
-      toast.success("School updated successfully");
-    } else {
-      const newSchool: School = {
-        id: `school-${Date.now()}`,
+    setSubmitting(true);
+    try {
+      const payload = {
         name: result.data.name,
         code: result.data.code,
         description: result.data.description ?? "",
-        headOfSchool: result.data.headOfSchool,
-        departmentsCount: 0,
+        head_of_school: result.data.head_of_school || null,
+        departments_count: result.data.departments_count,
         status: result.data.status,
       };
-      setSchools((prev) => [...prev, newSchool]);
-      toast.success("School created successfully");
+
+      if (editingSchool) {
+        await api.updateSchool(editingSchool.id, payload);
+        toast.success("School updated successfully");
+      } else {
+        await api.createSchool(payload);
+        toast.success("School created successfully");
+      }
+      setFormOpen(false);
+      await fetchSchools();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Operation failed";
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
     }
-    setFormOpen(false);
   };
 
-  const handleDelete = () => {
-    if (deletingSchool) {
-      setSchools((prev) => prev.filter((s) => s.id !== deletingSchool.id));
+  const handleDelete = async () => {
+    if (!deletingSchool) return;
+    try {
+      await api.deleteSchool(deletingSchool.id);
       toast.success("School deleted successfully");
       setDeleteOpen(false);
       setDeletingSchool(null);
+      await fetchSchools();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to delete school";
+      toast.error(message);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -169,12 +210,12 @@ export default function DashboardSchools() {
 
       <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
         <DataTable<Record<string, unknown>>
-          columns={columns as unknown as ColumnDef<Record<string, unknown>>[]}
+          columns={columns}
           data={schools as unknown as Record<string, unknown>[]}
           searchableFields={["name", "code"]}
           searchPlaceholder="Search schools..."
           rowActions={(row) => {
-            const school = row as unknown as School;
+            const school = row as unknown as ApiSchool;
             return (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -186,12 +227,14 @@ export default function DashboardSchools() {
                   <DropdownMenuItem onClick={() => openEditForm(school)}>
                     Edit
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={() => openDeleteDialog(school)}
-                  >
-                    Delete
-                  </DropdownMenuItem>
+                  {isSuperAdmin && (
+                    <DropdownMenuItem
+                      className="text-destructive"
+                      onClick={() => openDeleteDialog(school)}
+                    >
+                      Delete
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             );
@@ -241,24 +284,43 @@ export default function DashboardSchools() {
           </div>
 
           <div className="space-y-2">
-            <Label>Head of School</Label>
+            <Label htmlFor="school-head">Head of School</Label>
             <Select
-              value={formData.headOfSchool}
-              onValueChange={(val) => setFormData((f) => ({ ...f, headOfSchool: val }))}
+              value={formData.head_of_school || ""}
+              onValueChange={(val) =>
+                setFormData((f) => ({ ...f, head_of_school: val }))
+              }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select head of school" />
               </SelectTrigger>
               <SelectContent>
-                {lecturers.map((user) => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.name}
+                {staffUsers.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name} ({u.role.replace("_", " ")})
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {errors.headOfSchool && (
-              <p className="text-xs text-destructive">{errors.headOfSchool}</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="school-departments">Departments Count</Label>
+            <Input
+              id="school-departments"
+              type="number"
+              min={0}
+              value={formData.departments_count}
+              onChange={(e) =>
+                setFormData((f) => ({
+                  ...f,
+                  departments_count: parseInt(e.target.value) || 0,
+                }))
+              }
+              placeholder="0"
+            />
+            {errors.departments_count && (
+              <p className="text-xs text-destructive">{errors.departments_count}</p>
             )}
           </div>
 
@@ -279,6 +341,13 @@ export default function DashboardSchools() {
               </SelectContent>
             </Select>
           </div>
+
+          {submitting && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {editingSchool ? "Updating..." : "Creating..."}
+            </div>
+          )}
         </div>
       </EntityFormDialog>
 
