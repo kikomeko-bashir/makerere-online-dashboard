@@ -1,11 +1,12 @@
 import React, { Suspense } from "react";
-import { BrowserRouter, Routes, Route, Outlet, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet, Link, Navigate } from "react-router-dom";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
-import { AuthProvider } from "@/lib/auth-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import type { UserRole } from "@/lib/types";
 
 // Public pages
 const Home = React.lazy(() => import("@/pages/index"));
@@ -95,6 +96,16 @@ function RootLayout() {
 }
 
 function DashboardLayout() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <Loading />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -108,6 +119,29 @@ function DashboardLayout() {
       </SidebarInset>
     </SidebarProvider>
   );
+}
+
+function RoleGuard({ allowedRoles, children }: { allowedRoles: UserRole[]; children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!allowedRoles.includes(user.role)) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <h1 className="font-display text-6xl font-bold text-destructive">403</h1>
+          <h2 className="mt-4 text-xl font-semibold">Access Denied</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            You don't have permission to access this page.
+          </p>
+          <div className="mt-6">
+            <Link to="/dashboard" className="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90">
+              Back to dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return <>{children}</>;
 }
 
 function NotFound() {
@@ -176,12 +210,12 @@ export default function App() {
         </Route>
         <Route path="dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardOverview />} />
-          <Route path="schools" element={<DashboardSchools />} />
+          <Route path="schools" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardSchools /></RoleGuard>} />
           <Route path="courses" element={<DashboardCourses />} />
           <Route path="courses/:courseId" element={<DashboardCourseDetail />} />
-          <Route path="course-units" element={<DashboardCourseUnits />} />
-          <Route path="intakes" element={<DashboardIntakes />} />
-          <Route path="intakes/:intakeId" element={<DashboardIntakeDetail />} />
+          <Route path="course-units" element={<RoleGuard allowedRoles={["super_admin", "admin", "lecturer"]}><DashboardCourseUnits /></RoleGuard>} />
+          <Route path="intakes" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardIntakes /></RoleGuard>} />
+          <Route path="intakes/:intakeId" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardIntakeDetail /></RoleGuard>} />
           <Route path="enrollment" element={<DashboardEnrollment />} />
           <Route path="materials" element={<DashboardMaterials />} />
           <Route path="virtual-learning" element={<DashboardVirtualLearning />} />
@@ -192,14 +226,14 @@ export default function App() {
           />
           <Route path="certificates" element={<DashboardCertificates />} />
           <Route path="payments" element={<DashboardPayments />} />
-          <Route path="tutoring" element={<DashboardTutoring />} />
+          <Route path="tutoring" element={<RoleGuard allowedRoles={["lecturer", "student"]}><DashboardTutoring /></RoleGuard>} />
           <Route path="notifications" element={<DashboardNotifications />} />
-          <Route path="reporting" element={<DashboardReporting />} />
-          <Route path="settings" element={<DashboardSettings />} />
-          <Route path="admins" element={<DashboardAdmins />} />
-          <Route path="student" element={<DashboardStudent />} />
-          <Route path="teacher" element={<DashboardTeacher />} />
-          <Route path="admin" element={<DashboardAdmin />} />
+          <Route path="reporting" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardReporting /></RoleGuard>} />
+          <Route path="settings" element={<RoleGuard allowedRoles={["super_admin"]}><DashboardSettings /></RoleGuard>} />
+          <Route path="admins" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardAdmins /></RoleGuard>} />
+          <Route path="student" element={<RoleGuard allowedRoles={["student"]}><DashboardStudent /></RoleGuard>} />
+          <Route path="teacher" element={<RoleGuard allowedRoles={["lecturer"]}><DashboardTeacher /></RoleGuard>} />
+          <Route path="admin" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardAdmin /></RoleGuard>} />
           <Route path="*" element={<DashboardNotFound />} />
         </Route>
       </Routes>
