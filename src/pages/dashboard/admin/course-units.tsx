@@ -1,10 +1,9 @@
-import { useState } from "react";
-import { MoreHorizontal, Plus, CheckCircle, XCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MoreHorizontal, Plus, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import type { CourseUnit, ApprovalStatus } from "@/lib/types";
-import { mockCourseUnits, mockCourses, mockUsers } from "@/lib/mock-data";
+import { api, type ApiCourseUnit, type ApiCourse, type ApiUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DataTable, type ColumnDef } from "@/components/dashboard/data-table";
@@ -32,9 +31,9 @@ import {
 const courseUnitSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  courseId: z.string().min(1, "Course is required"),
-  creditHours: z.number().min(1, "Credit hours must be at least 1"),
-  lecturerId: z.string().min(1, "Lecturer is required"),
+  course_id: z.string().optional(),
+  credit_hours: z.number().min(1, "Credit hours must be at least 1"),
+  lecturer_id: z.string().optional(),
 });
 
 type CourseUnitFormData = z.infer<typeof courseUnitSchema>;
@@ -42,41 +41,67 @@ type CourseUnitFormData = z.infer<typeof courseUnitSchema>;
 const emptyForm: CourseUnitFormData = {
   title: "",
   description: "",
-  courseId: "",
-  creditHours: 3,
-  lecturerId: "",
+  course_id: "",
+  credit_hours: 3,
+  lecturer_id: "",
 };
 
 export default function DashboardCourseUnits() {
   const { user } = useAuth();
   const isLecturer = user.role === "lecturer";
+  const isAdmin = user.role === "admin" || user.role === "super_admin";
+  const isSuperAdmin = user.role === "super_admin";
 
-  const [units, setUnits] = useState<CourseUnit[]>([...mockCourseUnits]);
+  const [units, setUnits] = useState<ApiCourseUnit[]>([]);
+  const [courses, setCourses] = useState<ApiCourse[]>([]);
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [editingUnit, setEditingUnit] = useState<CourseUnit | null>(null);
-  const [deletingUnit, setDeletingUnit] = useState<CourseUnit | null>(null);
+  const [editingUnit, setEditingUnit] = useState<ApiCourseUnit | null>(null);
+  const [deletingUnit, setDeletingUnit] = useState<ApiCourseUnit | null>(null);
   const [formData, setFormData] = useState<CourseUnitFormData>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<keyof CourseUnitFormData, string>>>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  const lecturers = mockUsers.filter((u) => u.role === "lecturer");
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [unitsData, coursesData, usersData] = await Promise.all([
+        api.getCourseUnits(),
+        api.getCourses(),
+        api.getUsers().catch(() => [] as ApiUser[]),
+      ]);
+      setUnits(unitsData);
+      setCourses(coursesData);
+      setUsers(usersData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Lecturers only see their own course units
-  const displayedUnits = isLecturer
-    ? units.filter((u) => u.lecturerId === user.id)
-    : units;
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const lecturers = users.filter((u) => u.role === "lecturer");
 
   const getCourseName = (courseId: string) => {
-    const course = mockCourses.find((c) => c.id === courseId);
+    const course = courses.find((c) => c.id === courseId);
     return course?.title ?? "Unknown";
   };
 
-  const getLecturerName = (lecturerId: string) => {
-    const user = mockUsers.find((u) => u.id === lecturerId);
-    return user?.name ?? "Unknown";
+  const getLecturerName = (lecturerId: string | null) => {
+    if (!lecturerId) return "Unassigned";
+    const lecturer = users.find((u) => u.id === lecturerId);
+    return lecturer?.name ?? "Unknown";
   };
 
-  const getStatusBadge = (status: ApprovalStatus) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
         return <Badge variant="default">Active</Badge>;
@@ -88,26 +113,28 @@ export default function DashboardCourseUnits() {
         );
       case "rejected":
         return <Badge variant="destructive">Rejected</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const columns: ColumnDef<CourseUnit>[] = [
+  const columns: ColumnDef<Record<string, unknown>>[] = [
     { key: "title", header: "Title" },
     {
-      key: "courseId",
+      key: "course_id",
       header: "Course",
-      render: (row) => getCourseName(row.courseId),
+      render: (row) => getCourseName(row.course_id as string),
     },
     {
-      key: "lecturerId",
+      key: "lecturer_id",
       header: "Lecturer",
-      render: (row) => getLecturerName(row.lecturerId),
+      render: (row) => getLecturerName(row.lecturer_id as string | null),
     },
-    { key: "creditHours", header: "Credit Hours" },
+    { key: "credit_hours", header: "Credit Hours" },
     {
       key: "status",
       header: "Status",
-      render: (row) => getStatusBadge(row.status),
+      render: (row) => getStatusBadge(row.status as string),
     },
   ];
 
@@ -118,28 +145,29 @@ export default function DashboardCourseUnits() {
     setFormOpen(true);
   };
 
-  const openEditForm = (unit: CourseUnit) => {
+  const openEditForm = (unit: ApiCourseUnit) => {
     setEditingUnit(unit);
     setFormData({
       title: unit.title,
       description: unit.description,
-      courseId: unit.courseId,
-      creditHours: unit.creditHours,
-      lecturerId: unit.lecturerId,
+      course_id: unit.course_id ?? "",
+      credit_hours: unit.credit_hours,
+      lecturer_id: unit.lecturer_id ?? "",
     });
     setErrors({});
     setFormOpen(true);
   };
 
-  const openDeleteDialog = (unit: CourseUnit) => {
+  const openDeleteDialog = (unit: ApiCourseUnit) => {
     setDeletingUnit(unit);
     setDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const dataToValidate = isLecturer
-      ? { ...formData, lecturerId: user.id }
+      ? { ...formData, lecturer_id: user.id }
       : formData;
+
     const result = courseUnitSchema.safeParse(dataToValidate);
     if (!result.success) {
       const fieldErrors: Partial<Record<keyof CourseUnitFormData, string>> = {};
@@ -151,63 +179,105 @@ export default function DashboardCourseUnits() {
       return;
     }
 
-    if (editingUnit) {
-      setUnits((prev) =>
-        prev.map((u) =>
-          u.id === editingUnit.id
-            ? { ...u, ...result.data, description: result.data.description ?? "" }
-            : u,
-        ),
-      );
-      toast.success("Course unit updated successfully");
-    } else {
-      const newUnit: CourseUnit = {
-        id: `unit-${Date.now()}`,
-        title: result.data.title,
-        description: result.data.description ?? "",
-        courseId: result.data.courseId,
-        creditHours: result.data.creditHours,
-        lecturerId: isLecturer ? user.id : result.data.lecturerId,
-        status: isLecturer ? "pending_approval" : "active",
-      };
-      setUnits((prev) => [...prev, newUnit]);
-      toast.success(
-        isLecturer
-          ? "Course unit submitted for approval"
-          : "Course unit created successfully",
-      );
+    try {
+      setSubmitting(true);
+      if (editingUnit) {
+        const updated = await api.updateCourseUnit(editingUnit.id, {
+          title: result.data.title,
+          description: result.data.description ?? "",
+          course_id: result.data.course_id || null,
+          credit_hours: result.data.credit_hours,
+          lecturer_id: result.data.lecturer_id || null,
+        });
+        setUnits((prev) =>
+          prev.map((u) => (u.id === editingUnit.id ? updated : u)),
+        );
+        toast.success("Course unit updated successfully");
+      } else {
+        const created = await api.createCourseUnit({
+          title: result.data.title,
+          description: result.data.description ?? "",
+          course_id: result.data.course_id || null,
+          credit_hours: result.data.credit_hours,
+          lecturer_id: isLecturer ? user.id : (result.data.lecturer_id || null),
+          status: isLecturer ? "pending_approval" : "active",
+        });
+        setUnits((prev) => [created, ...prev]);
+        toast.success(
+          isLecturer
+            ? "Course unit submitted for approval"
+            : "Course unit created successfully",
+        );
+      }
+      setFormOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Operation failed");
+    } finally {
+      setSubmitting(false);
     }
-    setFormOpen(false);
   };
 
-  const handleDelete = () => {
-    if (deletingUnit) {
+  const handleDelete = async () => {
+    if (!deletingUnit) return;
+    try {
+      await api.deleteCourseUnit(deletingUnit.id);
       setUnits((prev) => prev.filter((u) => u.id !== deletingUnit.id));
       toast.success("Course unit deleted successfully");
       setDeleteOpen(false);
       setDeletingUnit(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
     }
   };
 
-  const handleApprove = (unit: CourseUnit) => {
-    setUnits((prev) =>
-      prev.map((u) => (u.id === unit.id ? { ...u, status: "active" as ApprovalStatus } : u)),
-    );
-    toast.success(`"${unit.title}" has been approved`);
+  const handleApprove = async (unit: ApiCourseUnit) => {
+    try {
+      const updated = await api.approveCourseUnit(unit.id);
+      setUnits((prev) => prev.map((u) => (u.id === unit.id ? updated : u)));
+      toast.success(`"${unit.title}" has been approved`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Approve failed");
+    }
   };
 
-  const handleReject = (unit: CourseUnit) => {
-    setUnits((prev) =>
-      prev.map((u) => (u.id === unit.id ? { ...u, status: "rejected" as ApprovalStatus } : u)),
-    );
-    toast.success(`"${unit.title}" has been rejected`);
+  const handleReject = async (unit: ApiCourseUnit) => {
+    try {
+      const updated = await api.rejectCourseUnit(unit.id);
+      setUnits((prev) => prev.map((u) => (u.id === unit.id ? updated : u)));
+      toast.success(`"${unit.title}" has been rejected`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Reject failed");
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-4">
+        <p className="text-destructive">{error}</p>
+        <Button onClick={fetchData} variant="outline">
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={isLecturer ? "My Course Units" : "Course Units"}
-        description={isLecturer ? "Manage your course units and modules." : "Manage course units and modules."}
+        description={
+          isLecturer
+            ? "Manage your course units and modules."
+            : "Manage course units and modules."
+        }
       >
         <Button onClick={openCreateForm}>
           <Plus className="mr-2 h-4 w-4" />
@@ -217,15 +287,15 @@ export default function DashboardCourseUnits() {
 
       <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
         <DataTable<Record<string, unknown>>
-          columns={columns as unknown as ColumnDef<Record<string, unknown>>[]}
-          data={displayedUnits as unknown as Record<string, unknown>[]}
+          columns={columns}
+          data={units as unknown as Record<string, unknown>[]}
           searchableFields={["title"]}
           searchPlaceholder="Search course units..."
           rowActions={(row) => {
-            const unit = row as unknown as CourseUnit;
+            const unit = row as unknown as ApiCourseUnit;
             return (
               <div className="flex items-center justify-end gap-1">
-                {!isLecturer && unit.status === "pending_approval" && (
+                {isAdmin && unit.status === "pending_approval" && (
                   <>
                     <Button
                       variant="ghost"
@@ -254,15 +324,19 @@ export default function DashboardCourseUnits() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => openEditForm(unit)}>
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive"
-                      onClick={() => openDeleteDialog(unit)}
-                    >
-                      Delete
-                    </DropdownMenuItem>
+                    {isAdmin && (
+                      <DropdownMenuItem onClick={() => openEditForm(unit)}>
+                        Edit
+                      </DropdownMenuItem>
+                    )}
+                    {isSuperAdmin && (
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => openDeleteDialog(unit)}
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -275,7 +349,9 @@ export default function DashboardCourseUnits() {
         open={formOpen}
         onOpenChange={setFormOpen}
         title={editingUnit ? "Edit Course Unit" : "Add Course Unit"}
-        description={editingUnit ? "Update course unit details." : "Create a new course unit."}
+        description={
+          editingUnit ? "Update course unit details." : "Create a new course unit."
+        }
         onSubmit={handleSubmit}
       >
         <div className="space-y-4">
@@ -295,7 +371,9 @@ export default function DashboardCourseUnits() {
             <Textarea
               id="unit-description"
               value={formData.description}
-              onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, description: e.target.value }))
+              }
               placeholder="Brief description of the course unit"
             />
           </div>
@@ -303,21 +381,23 @@ export default function DashboardCourseUnits() {
           <div className="space-y-2">
             <Label>Course</Label>
             <Select
-              value={formData.courseId}
-              onValueChange={(val) => setFormData((f) => ({ ...f, courseId: val }))}
+              value={formData.course_id}
+              onValueChange={(val) => setFormData((f) => ({ ...f, course_id: val }))}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select course" />
               </SelectTrigger>
               <SelectContent>
-                {mockCourses.map((course) => (
+                {courses.map((course) => (
                   <SelectItem key={course.id} value={course.id}>
                     {course.title}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {errors.courseId && <p className="text-xs text-destructive">{errors.courseId}</p>}
+            {errors.course_id && (
+              <p className="text-xs text-destructive">{errors.course_id}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -326,13 +406,13 @@ export default function DashboardCourseUnits() {
               id="unit-credit-hours"
               type="number"
               min={1}
-              value={formData.creditHours}
+              value={formData.credit_hours}
               onChange={(e) =>
-                setFormData((f) => ({ ...f, creditHours: Number(e.target.value) }))
+                setFormData((f) => ({ ...f, credit_hours: Number(e.target.value) }))
               }
             />
-            {errors.creditHours && (
-              <p className="text-xs text-destructive">{errors.creditHours}</p>
+            {errors.credit_hours && (
+              <p className="text-xs text-destructive">{errors.credit_hours}</p>
             )}
           </div>
 
@@ -342,8 +422,10 @@ export default function DashboardCourseUnits() {
               <Input value={user.name} disabled />
             ) : (
               <Select
-                value={formData.lecturerId}
-                onValueChange={(val) => setFormData((f) => ({ ...f, lecturerId: val }))}
+                value={formData.lecturer_id}
+                onValueChange={(val) =>
+                  setFormData((f) => ({ ...f, lecturer_id: val }))
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select lecturer" />
@@ -357,10 +439,17 @@ export default function DashboardCourseUnits() {
                 </SelectContent>
               </Select>
             )}
-            {errors.lecturerId && (
-              <p className="text-xs text-destructive">{errors.lecturerId}</p>
+            {errors.lecturer_id && (
+              <p className="text-xs text-destructive">{errors.lecturer_id}</p>
             )}
           </div>
+
+          {submitting && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Saving...
+            </div>
+          )}
         </div>
       </EntityFormDialog>
 

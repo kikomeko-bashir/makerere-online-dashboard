@@ -1,11 +1,10 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MoreHorizontal, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import type { Course } from "@/lib/types";
-import { mockCourses, mockSchools, mockCourseUnits } from "@/lib/mock-data";
+import { api, type ApiCourse, type ApiSchool, type ApiCourseUnit } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DataTable, type ColumnDef } from "@/components/dashboard/data-table";
 import { EntityFormDialog } from "@/components/dashboard/entity-form-dialog";
@@ -33,13 +32,13 @@ import {
 const courseSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  schoolId: z.string().min(1, "School is required"),
+  school_id: z.string().min(1, "School is required"),
   duration: z.number().min(1, "Duration must be at least 1"),
-  durationUnit: z.enum(["months", "years"]),
+  duration_unit: z.enum(["months", "years"]),
   fee: z.number().min(0, "Fee must be positive"),
-  passMark: z.number().min(0, "Pass mark must be 0-100").max(100, "Pass mark must be 0-100"),
-  unitIds: z.array(z.string()),
+  pass_mark: z.number().min(0, "Pass mark must be 0-100").max(100, "Pass mark must be 0-100"),
   status: z.enum(["active", "inactive"]),
+  unit_ids: z.array(z.string()).min(1, "At least one course unit is required"),
 });
 
 type CourseFormData = z.infer<typeof courseSchema>;
@@ -47,27 +46,57 @@ type CourseFormData = z.infer<typeof courseSchema>;
 const emptyForm: CourseFormData = {
   title: "",
   description: "",
-  schoolId: "",
+  school_id: "",
   duration: 12,
-  durationUnit: "months",
+  duration_unit: "months",
   fee: 0,
-  passMark: 50,
-  unitIds: [],
+  pass_mark: 50,
   status: "active",
+  unit_ids: [],
 };
 
 export default function DashboardCourses() {
-  const navigate = useNavigate();
-  const [courses, setCourses] = useState<Course[]>([...mockCourses]);
+  const { user } = useAuth();
+  const isSuperAdmin = user.role === "super_admin";
+
+  const [courses, setCourses] = useState<ApiCourse[]>([]);
+  const [schools, setSchools] = useState<ApiSchool[]>([]);
+  const [courseUnits, setCourseUnits] = useState<ApiCourseUnit[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-  const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
+  const [editingCourse, setEditingCourse] = useState<ApiCourse | null>(null);
+  const [deletingCourse, setDeletingCourse] = useState<ApiCourse | null>(null);
   const [formData, setFormData] = useState<CourseFormData>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<keyof CourseFormData, string>>>({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [coursesData, schoolsData, unitsData] = await Promise.all([
+        api.getCourses(),
+        api.getSchools(),
+        api.getCourseUnits(),
+      ]);
+      setCourses(coursesData);
+      setSchools(schoolsData);
+      setCourseUnits(unitsData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const getSchoolName = (schoolId: string) => {
-    const school = mockSchools.find((s) => s.id === schoolId);
+    const school = schools.find((s) => s.id === schoolId);
     return school?.name ?? "Unknown";
   };
 
@@ -75,35 +104,34 @@ export default function DashboardCourses() {
     return `UGX ${amount.toLocaleString()}`;
   };
 
-  const columns: ColumnDef<Course>[] = [
+  const columns: ColumnDef<Record<string, unknown>>[] = [
     { key: "title", header: "Title" },
     {
-      key: "schoolId",
+      key: "school_id",
       header: "School",
-      render: (row) => getSchoolName(row.schoolId),
+      render: (row) => getSchoolName(row.school_id as string),
     },
     {
       key: "duration",
       header: "Duration",
-      render: (row) => `${row.duration} ${row.durationUnit}`,
+      render: (row) => `${row.duration} ${row.duration_unit}`,
     },
     {
       key: "fee",
       header: "Fee",
-      render: (row) => formatFee(row.fee),
+      render: (row) => formatFee(row.fee as number),
     },
-    { key: "passMark", header: "Pass Mark", render: (row) => `${row.passMark}%` },
     {
-      key: "unitIds",
-      header: "Units",
-      render: (row) => row.unitIds.length,
+      key: "pass_mark",
+      header: "Pass Mark",
+      render: (row) => `${row.pass_mark}%`,
     },
     {
       key: "status",
       header: "Status",
       render: (row) => (
         <Badge variant={row.status === "active" ? "default" : "secondary"}>
-          {row.status}
+          {row.status as string}
         </Badge>
       ),
     },
@@ -116,29 +144,33 @@ export default function DashboardCourses() {
     setFormOpen(true);
   };
 
-  const openEditForm = (course: Course) => {
+  const openEditForm = (course: ApiCourse) => {
     setEditingCourse(course);
+    // Find units belonging to this course
+    const linkedUnitIds = courseUnits
+      .filter((u) => u.course_id === course.id)
+      .map((u) => u.id);
     setFormData({
       title: course.title,
       description: course.description,
-      schoolId: course.schoolId,
+      school_id: course.school_id,
       duration: course.duration,
-      durationUnit: course.durationUnit,
+      duration_unit: course.duration_unit as "months" | "years",
       fee: course.fee,
-      passMark: course.passMark,
-      unitIds: course.unitIds,
-      status: course.status,
+      pass_mark: course.pass_mark,
+      status: course.status as "active" | "inactive",
+      unit_ids: linkedUnitIds,
     });
     setErrors({});
     setFormOpen(true);
   };
 
-  const openDeleteDialog = (course: Course) => {
+  const openDeleteDialog = (course: ApiCourse) => {
     setDeletingCourse(course);
     setDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const result = courseSchema.safeParse(formData);
     if (!result.success) {
       const fieldErrors: Partial<Record<keyof CourseFormData, string>> = {};
@@ -150,51 +182,78 @@ export default function DashboardCourses() {
       return;
     }
 
-    if (editingCourse) {
-      setCourses((prev) =>
-        prev.map((c) =>
-          c.id === editingCourse.id
-            ? { ...c, ...result.data, description: result.data.description ?? "" }
-            : c,
-        ),
-      );
-      toast.success("Course updated successfully");
-    } else {
-      const newCourse: Course = {
-        id: `course-${Date.now()}`,
-        title: result.data.title,
-        description: result.data.description ?? "",
-        schoolId: result.data.schoolId,
-        duration: result.data.duration,
-        durationUnit: result.data.durationUnit,
-        fee: result.data.fee,
-        passMark: result.data.passMark,
-        unitIds: result.data.unitIds,
-        status: result.data.status,
-      };
-      setCourses((prev) => [...prev, newCourse]);
-      toast.success("Course created successfully");
+    try {
+      setSubmitting(true);
+      if (editingCourse) {
+        const updated = await api.updateCourse(editingCourse.id, {
+          title: result.data.title,
+          description: result.data.description ?? "",
+          school_id: result.data.school_id,
+          duration: result.data.duration,
+          duration_unit: result.data.duration_unit,
+          fee: result.data.fee,
+          pass_mark: result.data.pass_mark,
+          status: result.data.status,
+          unit_ids: result.data.unit_ids,
+        });
+        setCourses((prev) =>
+          prev.map((c) => (c.id === editingCourse.id ? updated : c)),
+        );
+        toast.success("Course updated successfully");
+      } else {
+        const created = await api.createCourse({
+          title: result.data.title,
+          description: result.data.description ?? "",
+          school_id: result.data.school_id,
+          duration: result.data.duration,
+          duration_unit: result.data.duration_unit,
+          fee: result.data.fee,
+          pass_mark: result.data.pass_mark,
+          status: result.data.status,
+          unit_ids: result.data.unit_ids,
+        });
+        setCourses((prev) => [created, ...prev]);
+        toast.success("Course created successfully");
+      }
+      setFormOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Operation failed");
+    } finally {
+      setSubmitting(false);
     }
-    setFormOpen(false);
   };
 
-  const handleDelete = () => {
-    if (deletingCourse) {
+  const handleDelete = async () => {
+    if (!deletingCourse) return;
+    try {
+      await api.deleteCourse(deletingCourse.id);
       setCourses((prev) => prev.filter((c) => c.id !== deletingCourse.id));
       toast.success("Course deleted successfully");
       setDeleteOpen(false);
       setDeletingCourse(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
     }
   };
 
-  const toggleUnit = (unitId: string) => {
-    setFormData((f) => ({
-      ...f,
-      unitIds: f.unitIds.includes(unitId)
-        ? f.unitIds.filter((id) => id !== unitId)
-        : [...f.unitIds, unitId],
-    }));
-  };
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-4">
+        <p className="text-destructive">{error}</p>
+        <Button onClick={fetchData} variant="outline">
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -210,12 +269,12 @@ export default function DashboardCourses() {
 
       <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
         <DataTable<Record<string, unknown>>
-          columns={columns as unknown as ColumnDef<Record<string, unknown>>[]}
+          columns={columns}
           data={courses as unknown as Record<string, unknown>[]}
           searchableFields={["title"]}
           searchPlaceholder="Search courses..."
           rowActions={(row) => {
-            const course = row as unknown as Course;
+            const course = row as unknown as ApiCourse;
             return (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -224,20 +283,17 @@ export default function DashboardCourses() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => navigate(`/dashboard/courses/${course.id}`)}
-                  >
-                    View
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => openEditForm(course)}>
                     Edit
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={() => openDeleteDialog(course)}
-                  >
-                    Delete
-                  </DropdownMenuItem>
+                  {isSuperAdmin && (
+                    <DropdownMenuItem
+                      className="text-destructive"
+                      onClick={() => openDeleteDialog(course)}
+                    >
+                      Delete
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             );
@@ -277,21 +333,21 @@ export default function DashboardCourses() {
           <div className="space-y-2">
             <Label>School</Label>
             <Select
-              value={formData.schoolId}
-              onValueChange={(val) => setFormData((f) => ({ ...f, schoolId: val }))}
+              value={formData.school_id}
+              onValueChange={(val) => setFormData((f) => ({ ...f, school_id: val }))}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select school" />
               </SelectTrigger>
               <SelectContent>
-                {mockSchools.map((school) => (
+                {schools.map((school) => (
                   <SelectItem key={school.id} value={school.id}>
                     {school.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {errors.schoolId && <p className="text-xs text-destructive">{errors.schoolId}</p>}
+            {errors.school_id && <p className="text-xs text-destructive">{errors.school_id}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -311,9 +367,9 @@ export default function DashboardCourses() {
             <div className="space-y-2">
               <Label>Unit</Label>
               <Select
-                value={formData.durationUnit}
+                value={formData.duration_unit}
                 onValueChange={(val) =>
-                  setFormData((f) => ({ ...f, durationUnit: val as "months" | "years" }))
+                  setFormData((f) => ({ ...f, duration_unit: val as "months" | "years" }))
                 }
               >
                 <SelectTrigger>
@@ -346,31 +402,45 @@ export default function DashboardCourses() {
                 type="number"
                 min={0}
                 max={100}
-                value={formData.passMark}
+                value={formData.pass_mark}
                 onChange={(e) =>
-                  setFormData((f) => ({ ...f, passMark: Number(e.target.value) }))
+                  setFormData((f) => ({ ...f, pass_mark: Number(e.target.value) }))
                 }
               />
-              {errors.passMark && <p className="text-xs text-destructive">{errors.passMark}</p>}
+              {errors.pass_mark && <p className="text-xs text-destructive">{errors.pass_mark}</p>}
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>Course Units</Label>
+            <Label>Course Units (select at least one)</Label>
             <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
-              {mockCourseUnits.map((unit) => (
-                <div key={unit.id} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`unit-${unit.id}`}
-                    checked={formData.unitIds.includes(unit.id)}
-                    onCheckedChange={() => toggleUnit(unit.id)}
-                  />
-                  <label htmlFor={`unit-${unit.id}`} className="text-sm">
-                    {unit.title}
-                  </label>
-                </div>
-              ))}
+              {courseUnits.filter((u) => !u.course_id || u.course_id === editingCourse?.id).length === 0 ? (
+                <p className="text-xs text-muted-foreground">No available course units. Create course units first.</p>
+              ) : (
+                courseUnits
+                  .filter((u) => !u.course_id || u.course_id === editingCourse?.id)
+                  .map((unit) => (
+                    <div key={unit.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`unit-${unit.id}`}
+                        checked={formData.unit_ids.includes(unit.id)}
+                        onCheckedChange={(checked) => {
+                          setFormData((f) => ({
+                            ...f,
+                            unit_ids: checked
+                              ? [...f.unit_ids, unit.id]
+                              : f.unit_ids.filter((id) => id !== unit.id),
+                          }));
+                        }}
+                      />
+                      <label htmlFor={`unit-${unit.id}`} className="text-sm">
+                        {unit.title}
+                      </label>
+                    </div>
+                  ))
+              )}
             </div>
+            {errors.unit_ids && <p className="text-xs text-destructive">{errors.unit_ids}</p>}
           </div>
 
           <div className="space-y-2">
@@ -390,6 +460,13 @@ export default function DashboardCourses() {
               </SelectContent>
             </Select>
           </div>
+
+          {submitting && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Saving...
+            </div>
+          )}
         </div>
       </EntityFormDialog>
 

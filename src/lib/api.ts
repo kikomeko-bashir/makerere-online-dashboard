@@ -27,6 +27,30 @@ export interface ApiSchool {
   created_at: string;
 }
 
+export interface ApiCourse {
+  id: string;
+  title: string;
+  description: string;
+  school_id: string;
+  duration: number;
+  duration_unit: string;
+  fee: number;
+  pass_mark: number;
+  status: string;
+  created_at: string;
+}
+
+export interface ApiCourseUnit {
+  id: string;
+  title: string;
+  description: string;
+  course_id: string | null;
+  lecturer_id: string | null;
+  credit_hours: number;
+  status: string;
+  created_at: string;
+}
+
 export interface ApiError {
   detail: string;
 }
@@ -103,4 +127,50 @@ export const api = {
 
   deleteSchool: (id: string) =>
     request<void>("/api/schools/" + id, { method: "DELETE" }),
+
+  // Course management
+  getCourses: () => request<ApiCourse[]>("/api/courses"),
+
+  createCourse: (data: Omit<ApiCourse, "id" | "created_at"> & { unit_ids: string[] }) =>
+    request<ApiCourse>("/api/courses", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateCourse: (id: string, data: Partial<Omit<ApiCourse, "id" | "created_at">> & { unit_ids?: string[] }) =>
+    request<ApiCourse>("/api/courses/" + id, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteCourse: (id: string) =>
+    request<void>("/api/courses/" + id, { method: "DELETE" }),
+
+  // Course Unit management
+  getCourseUnits: () => request<ApiCourseUnit[]>("/api/course-units"),
+
+  createCourseUnit: (data: Omit<ApiCourseUnit, "id" | "created_at">) =>
+    request<ApiCourseUnit>("/api/course-units", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateCourseUnit: (id: string, data: Partial<Omit<ApiCourseUnit, "id" | "created_at">>) =>
+    request<ApiCourseUnit>("/api/course-units/" + id, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  approveCourseUnit: (id: string) =>
+    request<ApiCourseUnit>("/api/course-units/" + id + "/approve", {
+      method: "PUT",
+    }),
+
+  rejectCourseUnit: (id: string) =>
+    request<ApiCourseUnit>("/api/course-units/" + id + "/reject", {
+      method: "PUT",
+    }),
+
+  deleteCourseUnit: (id: string) =>
+    request<void>("/api/course-units/" + id, { method: "DELETE" }),
 };
