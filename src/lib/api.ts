@@ -51,6 +51,28 @@ export interface ApiCourseUnit {
   created_at: string;
 }
 
+export interface ApiIntake {
+  id: string;
+  name: string;
+  year_level: number;
+  start_date: string;
+  end_date: string;
+  capacity: number;
+  enrolled_count: number;
+  fee: number;
+  course_ids: string[];
+  status: string;
+  created_at: string;
+}
+
+export interface ApiIntakeAssignment {
+  id: string;
+  intake_id: string;
+  course_unit_id: string;
+  lecturer_id: string;
+  created_at: string;
+}
+
 export interface ApiError {
   detail: string;
 }
@@ -146,6 +168,9 @@ export const api = {
   deleteCourse: (id: string) =>
     request<void>("/api/courses/" + id, { method: "DELETE" }),
 
+  getCourseUnitIds: (courseId: string) =>
+    request<string[]>("/api/courses/" + courseId + "/units"),
+
   // Course Unit management
   getCourseUnits: () => request<ApiCourseUnit[]>("/api/course-units"),
 
@@ -173,4 +198,37 @@ export const api = {
 
   deleteCourseUnit: (id: string) =>
     request<void>("/api/course-units/" + id, { method: "DELETE" }),
+
+  // Intake management
+  getIntakes: () => request<ApiIntake[]>("/api/intakes"),
+
+  createIntake: (data: Omit<ApiIntake, "id" | "enrolled_count" | "created_at">) =>
+    request<ApiIntake>("/api/intakes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateIntake: (id: string, data: Partial<Omit<ApiIntake, "id" | "enrolled_count" | "created_at">>) =>
+    request<ApiIntake>("/api/intakes/" + id, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteIntake: (id: string) =>
+    request<void>("/api/intakes/" + id, { method: "DELETE" }),
+
+  // Intake Unit Assignments (lecturer per unit per intake)
+  getIntakeAssignments: (intakeId?: string) =>
+    request<ApiIntakeAssignment[]>(
+      intakeId ? `/api/intake-assignments?intake_id=${intakeId}` : "/api/intake-assignments",
+    ),
+
+  createIntakeAssignment: (data: { intake_id: string; course_unit_id: string; lecturer_id: string }) =>
+    request<ApiIntakeAssignment>("/api/intake-assignments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteIntakeAssignment: (id: string) =>
+    request<void>("/api/intake-assignments/" + id, { method: "DELETE" }),
 };

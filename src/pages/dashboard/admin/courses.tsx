@@ -144,12 +144,15 @@ export default function DashboardCourses() {
     setFormOpen(true);
   };
 
-  const openEditForm = (course: ApiCourse) => {
+  const openEditForm = async (course: ApiCourse) => {
     setEditingCourse(course);
-    // Find units belonging to this course
-    const linkedUnitIds = courseUnits
-      .filter((u) => u.course_id === course.id)
-      .map((u) => u.id);
+    // Fetch linked unit IDs from junction table
+    let linkedUnitIds: string[] = [];
+    try {
+      linkedUnitIds = await api.getCourseUnitIds(course.id);
+    } catch {
+      // Fallback: no units linked
+    }
     setFormData({
       title: course.title,
       description: course.description,
@@ -414,12 +417,10 @@ export default function DashboardCourses() {
           <div className="space-y-2">
             <Label>Course Units (select at least one)</Label>
             <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
-              {courseUnits.filter((u) => !u.course_id || u.course_id === editingCourse?.id).length === 0 ? (
+              {courseUnits.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No available course units. Create course units first.</p>
               ) : (
-                courseUnits
-                  .filter((u) => !u.course_id || u.course_id === editingCourse?.id)
-                  .map((unit) => (
+                courseUnits.map((unit) => (
                     <div key={unit.id} className="flex items-center gap-2">
                       <Checkbox
                         id={`unit-${unit.id}`}

@@ -3,7 +3,7 @@ import { MoreHorizontal, Plus, CheckCircle, XCircle, Loader2 } from "lucide-reac
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { api, type ApiCourseUnit, type ApiCourse, type ApiUser } from "@/lib/api";
+import { api, type ApiCourseUnit, type ApiUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DataTable, type ColumnDef } from "@/components/dashboard/data-table";
@@ -31,7 +31,6 @@ import {
 const courseUnitSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  course_id: z.string().optional(),
   credit_hours: z.number().min(1, "Credit hours must be at least 1"),
   lecturer_id: z.string().optional(),
 });
@@ -41,7 +40,6 @@ type CourseUnitFormData = z.infer<typeof courseUnitSchema>;
 const emptyForm: CourseUnitFormData = {
   title: "",
   description: "",
-  course_id: "",
   credit_hours: 3,
   lecturer_id: "",
 };
@@ -53,7 +51,6 @@ export default function DashboardCourseUnits() {
   const isSuperAdmin = user.role === "super_admin";
 
   const [units, setUnits] = useState<ApiCourseUnit[]>([]);
-  const [courses, setCourses] = useState<ApiCourse[]>([]);
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,13 +66,11 @@ export default function DashboardCourseUnits() {
     try {
       setLoading(true);
       setError(null);
-      const [unitsData, coursesData, usersData] = await Promise.all([
+      const [unitsData, usersData] = await Promise.all([
         api.getCourseUnits(),
-        api.getCourses(),
         api.getUsers().catch(() => [] as ApiUser[]),
       ]);
       setUnits(unitsData);
-      setCourses(coursesData);
       setUsers(usersData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
@@ -89,11 +84,6 @@ export default function DashboardCourseUnits() {
   }, []);
 
   const lecturers = users.filter((u) => u.role === "lecturer");
-
-  const getCourseName = (courseId: string) => {
-    const course = courses.find((c) => c.id === courseId);
-    return course?.title ?? "Unknown";
-  };
 
   const getLecturerName = (lecturerId: string | null) => {
     if (!lecturerId) return "Unassigned";
@@ -121,11 +111,6 @@ export default function DashboardCourseUnits() {
   const columns: ColumnDef<Record<string, unknown>>[] = [
     { key: "title", header: "Title" },
     {
-      key: "course_id",
-      header: "Course",
-      render: (row) => getCourseName(row.course_id as string),
-    },
-    {
       key: "lecturer_id",
       header: "Lecturer",
       render: (row) => getLecturerName(row.lecturer_id as string | null),
@@ -150,7 +135,6 @@ export default function DashboardCourseUnits() {
     setFormData({
       title: unit.title,
       description: unit.description,
-      course_id: unit.course_id ?? "",
       credit_hours: unit.credit_hours,
       lecturer_id: unit.lecturer_id ?? "",
     });
@@ -185,7 +169,6 @@ export default function DashboardCourseUnits() {
         const updated = await api.updateCourseUnit(editingUnit.id, {
           title: result.data.title,
           description: result.data.description ?? "",
-          course_id: result.data.course_id || null,
           credit_hours: result.data.credit_hours,
           lecturer_id: result.data.lecturer_id || null,
         });
@@ -197,7 +180,7 @@ export default function DashboardCourseUnits() {
         const created = await api.createCourseUnit({
           title: result.data.title,
           description: result.data.description ?? "",
-          course_id: result.data.course_id || null,
+          course_id: null,
           credit_hours: result.data.credit_hours,
           lecturer_id: isLecturer ? user.id : (result.data.lecturer_id || null),
           status: isLecturer ? "pending_approval" : "active",
@@ -376,28 +359,6 @@ export default function DashboardCourseUnits() {
               }
               placeholder="Brief description of the course unit"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Course</Label>
-            <Select
-              value={formData.course_id}
-              onValueChange={(val) => setFormData((f) => ({ ...f, course_id: val }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select course" />
-              </SelectTrigger>
-              <SelectContent>
-                {courses.map((course) => (
-                  <SelectItem key={course.id} value={course.id}>
-                    {course.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.course_id && (
-              <p className="text-xs text-destructive">{errors.course_id}</p>
-            )}
           </div>
 
           <div className="space-y-2">

@@ -1,12 +1,10 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { MoreHorizontal, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { z } from "zod";
 import { format } from "date-fns";
 
-import type { Intake } from "@/lib/types";
-import { mockIntakes, mockCourses } from "@/lib/mock-data";
+import { api, type ApiIntake, type ApiCourse } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DataTable, type ColumnDef } from "@/components/dashboard/data-table";
 import { EntityFormDialog } from "@/components/dashboard/entity-form-dialog";
@@ -15,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -29,53 +28,70 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const intakeSchema = z
-  .object({
-    name: z.string().min(1, "Intake name is required"),
-    courseId: z.string().min(1, "Course is required"),
-    startDate: z.string().min(1, "Start date is required"),
-    endDate: z.string().min(1, "End date is required"),
-    capacity: z.number().min(1, "Capacity must be at least 1"),
-    feeOverride: z.number().optional(),
-    status: z.enum(["active", "inactive"]),
-  })
-  .refine((data) => new Date(data.endDate) > new Date(data.startDate), {
-    message: "End date must be after start date",
-    path: ["endDate"],
-  });
-
 type IntakeFormData = {
   name: string;
-  courseId: string;
-  startDate: string;
-  endDate: string;
+  year_level: number;
+  start_date: string;
+  end_date: string;
   capacity: number;
-  feeOverride?: number;
-  status: "active" | "inactive";
+  fee: number;
+  course_ids: string[];
+  status: string;
 };
 
 const emptyForm: IntakeFormData = {
   name: "",
-  courseId: "",
-  startDate: "",
-  endDate: "",
-  capacity: 50,
-  feeOverride: undefined,
+  year_level: 1,
+  start_date: "",
+  end_date: "",
+  capacity: 100,
+  fee: 0,
+  course_ids: [],
   status: "active",
 };
 
 export default function DashboardIntakes() {
-  const navigate = useNavigate();
-  const [intakes, setIntakes] = useState<Intake[]>([...mockIntakes]);
+  const { user } = useAuth();
+  const isSuperAdmin = user.role === "super_admin";
+
+  const [intakes, setIntakes] = useState<ApiIntake[]>([]);
+  const [courses, setCourses] = useState<ApiCourse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [editingIntake, setEditingIntake] = useState<Intake | null>(null);
-  const [deletingIntake, setDeletingIntake] = useState<Intake | null>(null);
+  const [editingIntake, setEditingIntake] = useState<ApiIntake | null>(null);
+  const [deletingIntake, setDeletingIntake] = useState<ApiIntake | null>(null);
   const [formData, setFormData] = useState<IntakeFormData>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [intakesData, coursesData] = await Promise.all([
+        api.getIntakes(),
+        api.getCourses(),
+      ]);
+      setIntakes(intakesData);
+      setCourses(coursesData);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load data";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const getCourseName = (courseId: string) => {
-    const course = mockCourses.find((c) => c.id === courseId);
+    const course = courses.find((c) => c.id === courseId);
     return course?.title ?? "Unknown";
   };
 
@@ -87,25 +103,43 @@ export default function DashboardIntakes() {
     }
   };
 
-  const columns: ColumnDef<Intake>[] = [
+  const formatFee = (fee: number) => {
+    return `UGX ${fee.toLocaleString()}`;
+  };
+
+  const columns: ColumnDef<ApiIntake>[] = [
     { key: "name", header: "Intake Name" },
     {
-      key: "courseId",
-      header: "Course",
-      render: (row) => getCourseName(row.courseId),
+      key: "year_level",
+      header: "Year/Level",
+      render: (row) => `Year ${row.year_level}`,
     },
     {
-      key: "startDate",
+      key: "course_ids",
+      header: "Courses",
+      render: (row) => (
+        <span title={row.course_ids.map(getCourseName).join(", ")}>
+          <Badge variant="secondary">{row.course_ids.length} course{row.course_ids.length !== 1 ? "s" : ""}</Badge>
+        </span>
+      ),
+    },
+    {
+      key: "start_date",
       header: "Start Date",
-      render: (row) => formatDate(row.startDate),
+      render: (row) => formatDate(row.start_date),
     },
     {
-      key: "endDate",
+      key: "end_date",
       header: "End Date",
-      render: (row) => formatDate(row.endDate),
+      render: (row) => formatDate(row.end_date),
     },
     { key: "capacity", header: "Capacity" },
-    { key: "enrolledCount", header: "Enrolled" },
+    { key: "enrolled_count", header: "Enrolled" },
+    {
+      key: "fee",
+      header: "Fee (UGX)",
+      render: (row) => formatFee(row.fee),
+    },
     {
       key: "status",
       header: "Status",
@@ -124,82 +158,127 @@ export default function DashboardIntakes() {
     setFormOpen(true);
   };
 
-  const openEditForm = (intake: Intake) => {
+  const openEditForm = (intake: ApiIntake) => {
     setEditingIntake(intake);
     setFormData({
       name: intake.name,
-      courseId: intake.courseId,
-      startDate: intake.startDate,
-      endDate: intake.endDate,
+      year_level: intake.year_level,
+      start_date: intake.start_date,
+      end_date: intake.end_date,
       capacity: intake.capacity,
-      feeOverride: intake.feeOverride,
+      fee: intake.fee,
+      course_ids: intake.course_ids,
       status: intake.status,
     });
     setErrors({});
     setFormOpen(true);
   };
 
-  const openDeleteDialog = (intake: Intake) => {
+  const openDeleteDialog = (intake: ApiIntake) => {
     setDeletingIntake(intake);
     setDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
-    const result = intakeSchema.safeParse(formData);
-    if (!result.success) {
-      const fieldErrors: Partial<Record<string, string>> = {};
-      result.error.errors.forEach((err) => {
-        const field = err.path[0] as string;
-        fieldErrors[field] = err.message;
-      });
-      setErrors(fieldErrors);
-      return;
+  const validateForm = (): boolean => {
+    const newErrors: Partial<Record<string, string>> = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = "Intake name is required";
+    }
+    if (!formData.start_date) {
+      newErrors.start_date = "Start date is required";
+    }
+    if (!formData.end_date) {
+      newErrors.end_date = "End date is required";
+    }
+    if (formData.start_date && formData.end_date && formData.end_date <= formData.start_date) {
+      newErrors.end_date = "End date must be after start date";
+    }
+    if (formData.capacity < 1) {
+      newErrors.capacity = "Capacity must be at least 1";
+    }
+    if (formData.course_ids.length === 0) {
+      newErrors.course_ids = "You must select at least one course";
     }
 
-    if (editingIntake) {
-      setIntakes((prev) =>
-        prev.map((i) =>
-          i.id === editingIntake.id
-            ? {
-                ...i,
-                name: result.data.name,
-                courseId: result.data.courseId,
-                startDate: result.data.startDate,
-                endDate: result.data.endDate,
-                capacity: result.data.capacity,
-                feeOverride: result.data.feeOverride,
-                status: result.data.status,
-              }
-            : i,
-        ),
-      );
-      toast.success("Intake updated successfully");
-    } else {
-      const newIntake: Intake = {
-        id: `intake-${Date.now()}`,
-        name: result.data.name,
-        courseId: result.data.courseId,
-        startDate: result.data.startDate,
-        endDate: result.data.endDate,
-        capacity: result.data.capacity,
-        enrolledCount: 0,
-        feeOverride: result.data.feeOverride,
-        status: result.data.status,
-      };
-      setIntakes((prev) => [...prev, newIntake]);
-      toast.success("Intake created successfully");
-    }
-    setFormOpen(false);
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const handleDelete = () => {
-    if (deletingIntake) {
+  const handleSubmit = async () => {
+    if (!validateForm()) return;
+
+    setSubmitting(true);
+    try {
+      if (editingIntake) {
+        const updated = await api.updateIntake(editingIntake.id, formData);
+        setIntakes((prev) => prev.map((i) => (i.id === editingIntake.id ? updated : i)));
+        toast.success("Intake updated successfully");
+      } else {
+        const created = await api.createIntake(formData);
+        setIntakes((prev) => [created, ...prev]);
+        toast.success("Intake created successfully");
+      }
+      setFormOpen(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Operation failed";
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingIntake) return;
+
+    try {
+      await api.deleteIntake(deletingIntake.id);
       setIntakes((prev) => prev.filter((i) => i.id !== deletingIntake.id));
       toast.success("Intake deleted successfully");
       setDeleteOpen(false);
       setDeletingIntake(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Delete failed";
+      toast.error(message);
     }
   };
+
+  const toggleCourse = (courseId: string) => {
+    setFormData((f) => {
+      const exists = f.course_ids.includes(courseId);
+      return {
+        ...f,
+        course_ids: exists
+          ? f.course_ids.filter((id) => id !== courseId)
+          : [...f.course_ids, courseId],
+      };
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Intake Management"
+          description="Manage student intakes and cohorts."
+        />
+        <div className="rounded-2xl border border-destructive bg-destructive/10 p-6 text-center">
+          <p className="text-destructive">{error}</p>
+          <Button variant="outline" className="mt-4" onClick={fetchData}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -209,7 +288,7 @@ export default function DashboardIntakes() {
       >
         <Button onClick={openCreateForm}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Intake
+          Create Intake
         </Button>
       </PageHeader>
 
@@ -220,7 +299,7 @@ export default function DashboardIntakes() {
           searchableFields={["name"]}
           searchPlaceholder="Search intakes..."
           rowActions={(row) => {
-            const intake = row as unknown as Intake;
+            const intake = row as unknown as ApiIntake;
             return (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -229,20 +308,17 @@ export default function DashboardIntakes() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => navigate(`/dashboard/intakes/${intake.id}`)}
-                  >
-                    View
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => openEditForm(intake)}>
                     Edit
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={() => openDeleteDialog(intake)}
-                  >
-                    Delete
-                  </DropdownMenuItem>
+                  {isSuperAdmin && (
+                    <DropdownMenuItem
+                      className="text-destructive"
+                      onClick={() => openDeleteDialog(intake)}
+                    >
+                      Delete
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             );
@@ -253,8 +329,12 @@ export default function DashboardIntakes() {
       <EntityFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
-        title={editingIntake ? "Edit Intake" : "Add Intake"}
-        description={editingIntake ? "Update intake details." : "Create a new intake."}
+        title={editingIntake ? "Edit Intake" : "Create Intake"}
+        description={
+          editingIntake
+            ? "Update intake details."
+            : "Create a new intake with courses, year level, and dates."
+        }
         onSubmit={handleSubmit}
       >
         <div className="space-y-4">
@@ -264,29 +344,30 @@ export default function DashboardIntakes() {
               id="intake-name"
               value={formData.name}
               onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. January 2025 Intake"
+              placeholder="e.g. January 2026 Intake"
             />
             {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
 
           <div className="space-y-2">
-            <Label>Course</Label>
+            <Label>Year / Level</Label>
             <Select
-              value={formData.courseId}
-              onValueChange={(val) => setFormData((f) => ({ ...f, courseId: val }))}
+              value={String(formData.year_level)}
+              onValueChange={(val) =>
+                setFormData((f) => ({ ...f, year_level: Number(val) }))
+              }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select course" />
+                <SelectValue placeholder="Select year" />
               </SelectTrigger>
               <SelectContent>
-                {mockCourses.map((course) => (
-                  <SelectItem key={course.id} value={course.id}>
-                    {course.title}
-                  </SelectItem>
-                ))}
+                <SelectItem value="1">Year 1</SelectItem>
+                <SelectItem value="2">Year 2</SelectItem>
+                <SelectItem value="3">Year 3</SelectItem>
+                <SelectItem value="4">Year 4</SelectItem>
+                <SelectItem value="5">Year 5</SelectItem>
               </SelectContent>
             </Select>
-            {errors.courseId && <p className="text-xs text-destructive">{errors.courseId}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -295,11 +376,13 @@ export default function DashboardIntakes() {
               <Input
                 id="intake-start"
                 type="date"
-                value={formData.startDate}
-                onChange={(e) => setFormData((f) => ({ ...f, startDate: e.target.value }))}
+                value={formData.start_date}
+                onChange={(e) =>
+                  setFormData((f) => ({ ...f, start_date: e.target.value }))
+                }
               />
-              {errors.startDate && (
-                <p className="text-xs text-destructive">{errors.startDate}</p>
+              {errors.start_date && (
+                <p className="text-xs text-destructive">{errors.start_date}</p>
               )}
             </div>
             <div className="space-y-2">
@@ -307,17 +390,19 @@ export default function DashboardIntakes() {
               <Input
                 id="intake-end"
                 type="date"
-                value={formData.endDate}
-                onChange={(e) => setFormData((f) => ({ ...f, endDate: e.target.value }))}
+                value={formData.end_date}
+                onChange={(e) =>
+                  setFormData((f) => ({ ...f, end_date: e.target.value }))
+                }
               />
-              {errors.endDate && (
-                <p className="text-xs text-destructive">{errors.endDate}</p>
+              {errors.end_date && (
+                <p className="text-xs text-destructive">{errors.end_date}</p>
               )}
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="intake-capacity">Maximum Capacity</Label>
+            <Label htmlFor="intake-capacity">Capacity</Label>
             <Input
               id="intake-capacity"
               type="number"
@@ -327,33 +412,57 @@ export default function DashboardIntakes() {
                 setFormData((f) => ({ ...f, capacity: Number(e.target.value) }))
               }
             />
-            {errors.capacity && <p className="text-xs text-destructive">{errors.capacity}</p>}
+            {errors.capacity && (
+              <p className="text-xs text-destructive">{errors.capacity}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="intake-fee-override">Fee Override (UGX, optional)</Label>
+            <Label htmlFor="intake-fee">Fee (UGX)</Label>
             <Input
-              id="intake-fee-override"
+              id="intake-fee"
               type="number"
               min={0}
-              value={formData.feeOverride ?? ""}
+              value={formData.fee}
               onChange={(e) =>
-                setFormData((f) => ({
-                  ...f,
-                  feeOverride: e.target.value ? Number(e.target.value) : undefined,
-                }))
+                setFormData((f) => ({ ...f, fee: Number(e.target.value) }))
               }
-              placeholder="Leave empty to use course fee"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Courses (select at least one)</Label>
+            <div className="max-h-48 overflow-y-auto rounded-md border p-3 space-y-2">
+              {courses.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No courses available. Create courses first.</p>
+              ) : (
+                courses.map((course) => (
+                  <div key={course.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`course-${course.id}`}
+                      checked={formData.course_ids.includes(course.id)}
+                      onCheckedChange={() => toggleCourse(course.id)}
+                    />
+                    <label
+                      htmlFor={`course-${course.id}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      {course.title}
+                    </label>
+                  </div>
+                ))
+              )}
+            </div>
+            {errors.course_ids && (
+              <p className="text-xs text-destructive">{errors.course_ids}</p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label>Status</Label>
             <Select
               value={formData.status}
-              onValueChange={(val) =>
-                setFormData((f) => ({ ...f, status: val as "active" | "inactive" }))
-              }
+              onValueChange={(val) => setFormData((f) => ({ ...f, status: val }))}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -364,6 +473,13 @@ export default function DashboardIntakes() {
               </SelectContent>
             </Select>
           </div>
+
+          {submitting && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Saving...
+            </div>
+          )}
         </div>
       </EntityFormDialog>
 
