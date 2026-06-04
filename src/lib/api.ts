@@ -37,6 +37,7 @@ export interface ApiCourse {
   fee: number;
   pass_mark: number;
   status: string;
+  image_url: string | null;
   created_at: string;
 }
 
@@ -70,6 +71,96 @@ export interface ApiIntakeAssignment {
   intake_id: string;
   course_unit_id: string;
   lecturer_id: string;
+  created_at: string;
+}
+
+export interface ApiMaterial {
+  id: string;
+  course_unit_id: string;
+  title: string;
+  description: string;
+  type: string;
+  file_url: string;
+  file_size: number;
+  uploaded_by: string;
+  created_at: string;
+}
+
+export interface ApiAssessment {
+  id: string;
+  course_unit_id: string;
+  title: string;
+  type: string;
+  pass_mark: number;
+  time_limit: number | null;
+  max_attempts: number;
+  start_date: string | null;
+  end_date: string | null;
+  instructions: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface ApiVirtualClass {
+  id: string;
+  course_unit_id: string;
+  title: string;
+  date: string;
+  start_time: string;
+  duration: number;
+  platform: string;
+  meeting_link: string;
+  is_live: boolean;
+  lecturer_id: string;
+  created_at: string;
+}
+
+export interface ApiSubject {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+}
+
+export interface ApiTutorPublic {
+  id: string;
+  name: string;
+  subjects: string[];
+  hourly_rate: number;
+  bio: string;
+  is_available: boolean;
+}
+
+export interface ApiTutorProfile {
+  id: string;
+  user_id: string;
+  subjects: string[];
+  hourly_rate: number;
+  bio: string;
+  is_available: boolean;
+}
+
+export interface ApiEnrollment {
+  id: string;
+  student_id: string;
+  intake_id: string;
+  course_id: string;
+  enrollment_date: string;
+  status: string;
+  payment_status: string;
+  created_at: string;
+}
+
+export interface ApiTutoringBooking {
+  id: string;
+  student_id: string;
+  tutor_profile_id: string;
+  subject: string;
+  date: string;
+  time_slot: string;
+  duration: number;
+  total_cost: number;
+  status: string;
   created_at: string;
 }
 
@@ -231,4 +322,132 @@ export const api = {
 
   deleteIntakeAssignment: (id: string) =>
     request<void>("/api/intake-assignments/" + id, { method: "DELETE" }),
+
+  // System Settings
+  getSettings: () =>
+    request<{ settings: Record<string, string> }>("/api/settings"),
+
+  updateSettings: (settings: Record<string, string>) =>
+    request<{ settings: Record<string, string> }>("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ settings }),
+    }),
+
+  // Study Materials
+  getMaterials: (unitId: string) =>
+    request<ApiMaterial[]>("/api/materials?course_unit_id=" + unitId),
+
+  createMaterial: (data: Omit<ApiMaterial, "id" | "uploaded_by" | "created_at">) =>
+    request<ApiMaterial>("/api/materials", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteMaterial: (id: string) =>
+    request<void>("/api/materials/" + id, { method: "DELETE" }),
+
+  // Assessments
+  getAssessments: (unitId: string) =>
+    request<ApiAssessment[]>("/api/assessments?course_unit_id=" + unitId),
+
+  createAssessment: (data: Omit<ApiAssessment, "id" | "created_by" | "created_at">) =>
+    request<ApiAssessment>("/api/assessments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteAssessment: (id: string) =>
+    request<void>("/api/assessments/" + id, { method: "DELETE" }),
+
+  // Virtual Classes
+  getVirtualClasses: (unitId: string) =>
+    request<ApiVirtualClass[]>("/api/virtual-classes?course_unit_id=" + unitId),
+
+  createVirtualClass: (data: Omit<ApiVirtualClass, "id" | "is_live" | "lecturer_id" | "created_at">) =>
+    request<ApiVirtualClass>("/api/virtual-classes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteVirtualClass: (id: string) =>
+    request<void>("/api/virtual-classes/" + id, { method: "DELETE" }),
+
+  // Subjects
+  getSubjects: () => request<ApiSubject[]>("/api/subjects"),
+
+  createSubject: (data: { name: string; description: string }) =>
+    request<ApiSubject>("/api/subjects", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateSubject: (id: string, data: { name?: string; description?: string }) =>
+    request<ApiSubject>("/api/subjects/" + id, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteSubject: (id: string) =>
+    request<void>("/api/subjects/" + id, { method: "DELETE" }),
+
+  // Tutoring
+  getPublicTutors: async (): Promise<ApiTutorPublic[]> => {
+    const res = await fetch(`${API_BASE_URL}/api/tutoring/public`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) {
+      const error: ApiError = await res.json().catch(() => ({
+        detail: "An unexpected error occurred",
+      }));
+      throw new Error(error.detail);
+    }
+    return res.json();
+  },
+
+  getMyTutorProfile: () =>
+    request<ApiTutorProfile>("/api/tutoring/my-profile"),
+
+  updateMyTutorProfile: (data: {
+    subjects: string[];
+    hourly_rate: number;
+    bio: string;
+    is_available: boolean;
+  }) =>
+    request<ApiTutorProfile>("/api/tutoring/my-profile", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Enrollments
+  getEnrollments: () => request<ApiEnrollment[]>("/api/enrollments"),
+
+  createEnrollment: (intakeId: string, courseId: string) =>
+    request<ApiEnrollment>("/api/enrollments", {
+      method: "POST",
+      body: JSON.stringify({ intake_id: intakeId, course_id: courseId }),
+    }),
+
+  completeEnrollmentPayment: (id: string) =>
+    request<ApiEnrollment>("/api/enrollments/" + id + "/complete-payment", {
+      method: "PUT",
+    }),
+
+  deleteEnrollment: (id: string) =>
+    request<void>("/api/enrollments/" + id, { method: "DELETE" }),
+
+  // Tutoring Bookings
+  getTutoringBookings: () =>
+    request<ApiTutoringBooking[]>("/api/tutoring/bookings"),
+
+  createTutoringBooking: (data: {
+    tutor_profile_id: string;
+    subject: string;
+    date: string;
+    time_slot: string;
+    duration: number;
+  }) =>
+    request<ApiTutoringBooking>("/api/tutoring/bookings", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { MoreHorizontal, Plus, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -46,6 +47,7 @@ const emptyForm: CourseUnitFormData = {
 
 export default function DashboardCourseUnits() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isLecturer = user.role === "lecturer";
   const isAdmin = user.role === "admin" || user.role === "super_admin";
   const isSuperAdmin = user.role === "super_admin";
@@ -307,6 +309,9 @@ export default function DashboardCourseUnits() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => navigate(`/dashboard/course-units/${unit.id}`)}>
+                      View
+                    </DropdownMenuItem>
                     {isAdmin && (
                       <DropdownMenuItem onClick={() => openEditForm(unit)}>
                         Edit

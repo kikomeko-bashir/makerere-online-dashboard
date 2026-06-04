@@ -20,6 +20,7 @@ const GetStarted = React.lazy(() => import("@/pages/get-started"));
 const CertificateVerification = React.lazy(
   () => import("@/pages/certificate-verification"),
 );
+const Tutoring = React.lazy(() => import("@/pages/tutoring"));
 
 // Dashboard pages
 const DashboardOverview = React.lazy(() => import("@/pages/dashboard/index"));
@@ -31,12 +32,18 @@ const DashboardCourseDetail = React.lazy(
 const DashboardCourseUnits = React.lazy(
   () => import("@/pages/dashboard/admin/course-units"),
 );
+const CourseUnitDetail = React.lazy(
+  () => import("@/pages/dashboard/lecturer/course-unit-detail"),
+);
 const DashboardIntakes = React.lazy(() => import("@/pages/dashboard/admin/intakes"));
 const DashboardIntakeDetail = React.lazy(
   () => import("@/pages/dashboard/admin/intakes.$intakeId"),
 );
 const DashboardEnrollment = React.lazy(
   () => import("@/pages/dashboard/admin/enrollment"),
+);
+const EnrollmentIntake = React.lazy(
+  () => import("@/pages/dashboard/student/enrollment-intake"),
 );
 const DashboardMaterials = React.lazy(
   () => import("@/pages/dashboard/lecturer/materials"),
@@ -197,6 +204,7 @@ export default function App() {
           <Route index element={<Home />} />
           <Route path="about" element={<About />} />
           <Route path="contact" element={<Contact />} />
+          <Route path="tutoring" element={<Tutoring />} />
           <Route path="features" element={<Features />} />
           <Route path="courses" element={<Courses />} />
           <Route path="courses/:courseId" element={<CourseDetail />} />
@@ -214,9 +222,11 @@ export default function App() {
           <Route path="courses" element={<DashboardCourses />} />
           <Route path="courses/:courseId" element={<DashboardCourseDetail />} />
           <Route path="course-units" element={<RoleGuard allowedRoles={["super_admin", "admin", "lecturer"]}><DashboardCourseUnits /></RoleGuard>} />
+          <Route path="course-units/:unitId" element={<RoleGuard allowedRoles={["super_admin", "admin", "lecturer"]}><CourseUnitDetail /></RoleGuard>} />
           <Route path="intakes" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardIntakes /></RoleGuard>} />
           <Route path="intakes/:intakeId" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardIntakeDetail /></RoleGuard>} />
           <Route path="enrollment" element={<DashboardEnrollment />} />
+          <Route path="enrollment/:intakeId" element={<EnrollmentIntake />} />
           <Route path="materials" element={<DashboardMaterials />} />
           <Route path="virtual-learning" element={<DashboardVirtualLearning />} />
           <Route path="examinations" element={<DashboardExaminations />} />

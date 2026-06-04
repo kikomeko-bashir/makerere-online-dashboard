@@ -57,6 +57,103 @@ const emptyForm: CourseFormData = {
 
 export default function DashboardCourses() {
   const { user } = useAuth();
+
+  if (user.role === "student") {
+    return <StudentCoursesView />;
+  }
+
+  return <AdminCoursesView />;
+}
+
+// ─── Student View ──────────────────────────────────────────────────────────────
+
+function StudentCoursesView() {
+  const [courses, setCourses] = useState<ApiCourse[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadMyCourses();
+  }, []);
+
+  const loadMyCourses = async () => {
+    try {
+      setLoading(true);
+      const [enrollments, allCourses] = await Promise.all([
+        api.getEnrollments(),
+        api.getCourses(),
+      ]);
+      // Get course IDs from enrollments
+      const enrolledCourseIds = enrollments.map((e) => e.course_id);
+      const myCourses = allCourses.filter((c) => enrolledCourseIds.includes(c.id));
+      setCourses(myCourses);
+    } catch {
+      toast.error("Failed to load courses");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title="My Courses" description="Courses you are enrolled in." />
+
+      {courses.length === 0 ? (
+        <div className="rounded-2xl border bg-card p-8 text-center text-muted-foreground shadow-soft">
+          <p className="font-medium">No courses yet</p>
+          <p className="mt-1 text-sm">Enroll in an intake to start learning.</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {courses.map((course) => (
+            <div
+              key={course.id}
+              className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft hover:shadow-elegant transition-all"
+            >
+              <div className="relative h-40 overflow-hidden bg-muted">
+                <img
+                  src={course.image_url || "/assets/makerere-logo.png"}
+                  alt={course.title}
+                  className={`h-full w-full ${course.image_url ? "object-cover" : "object-contain p-8 opacity-30"} group-hover:scale-105 transition-transform duration-500`}
+                />
+                <div className="absolute top-3 right-3">
+                  <Badge variant="secondary" className="bg-card/90 text-foreground text-xs font-semibold">
+                    {course.fee === 0 ? "Free" : `UGX ${course.fee.toLocaleString()}`}
+                  </Badge>
+                </div>
+              </div>
+              <div className="flex flex-1 flex-col p-4">
+                <h3 className="font-display text-base font-semibold leading-tight line-clamp-2">
+                  {course.title}
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                  {course.description || "No description"}
+                </p>
+                <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                  <span>{course.duration} {course.duration_unit}</span>
+                  <span>Pass: {course.pass_mark}%</span>
+                </div>
+                <Badge variant="default" className="mt-2 w-fit">Enrolled</Badge>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Admin View ────────────────────────────────────────────────────────────────
+
+function AdminCoursesView() {
+  const { user } = useAuth();
   const isSuperAdmin = user.role === "super_admin";
 
   const [courses, setCourses] = useState<ApiCourse[]>([]);
@@ -213,6 +310,7 @@ export default function DashboardCourses() {
           fee: result.data.fee,
           pass_mark: result.data.pass_mark,
           status: result.data.status,
+          image_url: null,
           unit_ids: result.data.unit_ids,
         });
         setCourses((prev) => [created, ...prev]);

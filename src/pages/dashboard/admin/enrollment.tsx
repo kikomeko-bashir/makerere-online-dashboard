@@ -1,23 +1,15 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { BookOpen, Clock, CreditCard } from "lucide-react";
+import { BookOpen, Clock, CreditCard, Users, Loader2 } from "lucide-react";
 
-import type { Enrollment, EnrollmentStatus, Course } from "@/lib/types";
-import {
-  mockEnrollments,
-  mockUsers,
-  mockCourses,
-  mockCourseUnits,
-  mockSchools,
-} from "@/lib/mock-data";
+import { api, ApiEnrollment, ApiIntake, ApiCourse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DataTable, type ColumnDef } from "@/components/dashboard/data-table";
-import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -36,22 +28,23 @@ function formatUGX(amount: number): string {
 
 function AdminEnrollmentView() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const getStudentName = (studentId: string) => {
-    const user = mockUsers.find((u) => u.id === studentId);
-    return user?.name ?? "Unknown";
-  };
+  useEffect(() => {
+    loadEnrollments();
+  }, []);
 
-  const getCourseOrUnitName = (enrollment: Enrollment) => {
-    if (enrollment.courseId) {
-      const course = mockCourses.find((c) => c.id === enrollment.courseId);
-      return course?.title ?? "Unknown Course";
+  const loadEnrollments = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getEnrollments();
+      setEnrollments(data);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load enrollments");
+    } finally {
+      setLoading(false);
     }
-    if (enrollment.courseUnitId) {
-      const unit = mockCourseUnits.find((u) => u.id === enrollment.courseUnitId);
-      return unit?.title ?? "Unknown Unit";
-    }
-    return "N/A";
   };
 
   const formatDate = (dateStr: string) => {
@@ -62,7 +55,7 @@ function AdminEnrollmentView() {
     }
   };
 
-  const getStatusBadge = (status: EnrollmentStatus) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
         return <Badge variant="default">Active</Badge>;
@@ -80,6 +73,8 @@ function AdminEnrollmentView() {
         );
       case "dropped":
         return <Badge variant="destructive">Dropped</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
@@ -105,25 +100,25 @@ function AdminEnrollmentView() {
   };
 
   const filteredEnrollments = useMemo(() => {
-    if (statusFilter === "all") return mockEnrollments;
-    return mockEnrollments.filter((e) => e.status === statusFilter);
-  }, [statusFilter]);
+    if (statusFilter === "all") return enrollments;
+    return enrollments.filter((e) => e.status === statusFilter);
+  }, [statusFilter, enrollments]);
 
-  const columns: ColumnDef<Enrollment>[] = [
+  const columns: ColumnDef<ApiEnrollment>[] = [
     {
-      key: "studentId",
-      header: "Student",
-      render: (row) => getStudentName(row.studentId),
+      key: "student_id",
+      header: "Student ID",
+      render: (row) => <span className="font-mono text-xs">{row.student_id.slice(0, 8)}...</span>,
     },
     {
-      key: "courseId",
-      header: "Course / Unit",
-      render: (row) => getCourseOrUnitName(row),
+      key: "intake_id",
+      header: "Intake ID",
+      render: (row) => <span className="font-mono text-xs">{row.intake_id.slice(0, 8)}...</span>,
     },
     {
-      key: "enrollmentDate",
+      key: "enrollment_date",
       header: "Enrollment Date",
-      render: (row) => formatDate(row.enrollmentDate),
+      render: (row) => formatDate(row.enrollment_date),
     },
     {
       key: "status",
@@ -131,17 +126,25 @@ function AdminEnrollmentView() {
       render: (row) => getStatusBadge(row.status),
     },
     {
-      key: "paymentStatus",
+      key: "payment_status",
       header: "Payment Status",
-      render: (row) => getPaymentBadge(row.paymentStatus),
+      render: (row) => getPaymentBadge(row.payment_status),
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Enrollment Management"
-        description="View and manage student enrollments across courses."
+        description="View and manage student enrollments across intakes."
       />
 
       <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
@@ -166,7 +169,7 @@ function AdminEnrollmentView() {
         <DataTable<Record<string, unknown>>
           columns={columns as unknown as ColumnDef<Record<string, unknown>>[]}
           data={filteredEnrollments as unknown as Record<string, unknown>[]}
-          searchableFields={["studentId"]}
+          searchableFields={["student_id"]}
           searchPlaceholder="Search enrollments..."
           emptyMessage="No enrollments found."
         />
@@ -179,131 +182,105 @@ function AdminEnrollmentView() {
 
 function StudentEnrollmentView() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([...mockEnrollments]);
-  const [schoolFilter, setSchoolFilter] = useState<string>("all");
-  const [durationFilter, setDurationFilter] = useState<string>("all");
+  const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([]);
+  const [intakes, setIntakes] = useState<ApiIntake[]>([]);
+  const [courses, setCourses] = useState<ApiCourse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState<string | null>(null);
+
+  const [yearFilter, setYearFilter] = useState<string>("all");
   const [feeRange, setFeeRange] = useState<string>("all");
-  const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
 
-  // Student's enrollments
-  const myEnrollments = enrollments.filter((e) => e.studentId === user.id);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  // Already enrolled course IDs
-  const enrolledCourseIds = myEnrollments
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [enrollmentData, intakeData, courseData] = await Promise.all([
+        api.getEnrollments(),
+        api.getIntakes(),
+        api.getCourses(),
+      ]);
+      setEnrollments(enrollmentData);
+      setIntakes(intakeData);
+      setCourses(courseData);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Already enrolled intake IDs (not dropped)
+  const enrolledIntakeIds = enrollments
     .filter((e) => e.status !== "dropped")
-    .map((e) => e.courseId)
-    .filter(Boolean);
+    .map((e) => e.intake_id);
 
-  // Available courses (active, not already enrolled)
-  const availableCourses = useMemo(() => {
-    let courses = mockCourses.filter(
-      (c) => c.status === "active" && !enrolledCourseIds.includes(c.id),
+  // Available intakes (active, has capacity, not already enrolled)
+  const availableIntakes = useMemo(() => {
+    let filtered = intakes.filter(
+      (i) =>
+        i.status === "active" &&
+        i.enrolled_count < i.capacity &&
+        !enrolledIntakeIds.includes(i.id),
     );
 
-    if (schoolFilter !== "all") {
-      courses = courses.filter((c) => c.schoolId === schoolFilter);
-    }
-
-    if (durationFilter !== "all") {
-      switch (durationFilter) {
-        case "short":
-          courses = courses.filter((c) => {
-            const months = c.durationUnit === "years" ? c.duration * 12 : c.duration;
-            return months <= 12;
-          });
-          break;
-        case "medium":
-          courses = courses.filter((c) => {
-            const months = c.durationUnit === "years" ? c.duration * 12 : c.duration;
-            return months > 12 && months <= 36;
-          });
-          break;
-        case "long":
-          courses = courses.filter((c) => {
-            const months = c.durationUnit === "years" ? c.duration * 12 : c.duration;
-            return months > 36;
-          });
-          break;
-      }
+    if (yearFilter !== "all") {
+      filtered = filtered.filter((i) => i.year_level === parseInt(yearFilter));
     }
 
     if (feeRange !== "all") {
       switch (feeRange) {
         case "under3m":
-          courses = courses.filter((c) => c.fee < 3000000);
+          filtered = filtered.filter((i) => i.fee < 3000000);
           break;
         case "3m-5m":
-          courses = courses.filter((c) => c.fee >= 3000000 && c.fee <= 5000000);
+          filtered = filtered.filter((i) => i.fee >= 3000000 && i.fee <= 5000000);
           break;
         case "over5m":
-          courses = courses.filter((c) => c.fee > 5000000);
+          filtered = filtered.filter((i) => i.fee > 5000000);
           break;
       }
     }
 
-    return courses;
-  }, [schoolFilter, durationFilter, feeRange, enrolledCourseIds]);
+    return filtered;
+  }, [intakes, yearFilter, feeRange, enrolledIntakeIds]);
 
-  const getSchoolName = (schoolId: string) => {
-    const school = mockSchools.find((s) => s.id === schoolId);
-    return school?.name ?? "Unknown School";
+  const getCourseName = (courseId: string) => {
+    const course = courses.find((c) => c.id === courseId);
+    return course?.title ?? courseId.slice(0, 8);
   };
 
-  const getDurationLabel = (course: Course) => {
-    return `${course.duration} ${course.durationUnit}`;
+  const getIntakeCourseNames = (intake: ApiIntake) => {
+    if (!intake.course_ids || intake.course_ids.length === 0) return "No courses";
+    return intake.course_ids.map((id) => getCourseName(id)).join(", ");
   };
 
-  const handleEnrollClick = (course: Course) => {
-    setSelectedCourse(course);
-    setEnrollDialogOpen(true);
-  };
-
-  const handleConfirmEnroll = () => {
-    if (!selectedCourse) return;
-
-    const newEnrollment: Enrollment = {
-      id: `enroll-${Date.now()}`,
-      studentId: user.id,
-      courseId: selectedCourse.id,
-      enrollmentDate: new Date().toISOString().split("T")[0],
-      status: "payment_pending",
-      paymentStatus: "pending",
-    };
-
-    setEnrollments((prev) => [...prev, newEnrollment]);
-    toast.success("Enrollment initiated!", {
-      description: `Please complete payment for ${selectedCourse.title}.`,
-    });
-    setEnrollDialogOpen(false);
-    setSelectedCourse(null);
-  };
-
-  const handleCompletePayment = (enrollment: Enrollment) => {
-    setEnrollments((prev) =>
-      prev.map((e) =>
-        e.id === enrollment.id
-          ? { ...e, status: "active" as const, paymentStatus: "completed" as const }
-          : e,
-      ),
-    );
-    toast.success("Payment completed successfully!");
-  };
-
-  const getCourseOrUnitName = (enrollment: Enrollment) => {
-    if (enrollment.courseId) {
-      const course = mockCourses.find((c) => c.id === enrollment.courseId);
-      return course?.title ?? "Unknown Course";
+  const handleCompletePayment = async (enrollment: ApiEnrollment) => {
+    try {
+      setPaying(enrollment.id);
+      const updated = await api.completeEnrollmentPayment(enrollment.id);
+      setEnrollments((prev) =>
+        prev.map((e) => (e.id === updated.id ? updated : e)),
+      );
+      toast.success("Payment completed successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to complete payment");
+    } finally {
+      setPaying(null);
     }
-    if (enrollment.courseUnitId) {
-      const unit = mockCourseUnits.find((u) => u.id === enrollment.courseUnitId);
-      return unit?.title ?? "Unknown Unit";
-    }
-    return "N/A";
   };
 
-  const getStatusBadge = (status: EnrollmentStatus) => {
+  const getIntakeName = (intakeId: string) => {
+    const intake = intakes.find((i) => i.id === intakeId);
+    return intake?.name ?? intakeId.slice(0, 8);
+  };
+
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
         return <Badge variant="default">Active</Badge>;
@@ -321,6 +298,8 @@ function StudentEnrollmentView() {
         );
       case "dropped":
         return <Badge variant="destructive">Dropped</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
@@ -345,16 +324,16 @@ function StudentEnrollmentView() {
     }
   };
 
-  const historyColumns: ColumnDef<Enrollment>[] = [
+  const historyColumns: ColumnDef<ApiEnrollment>[] = [
     {
-      key: "courseId",
-      header: "Course / Unit",
-      render: (row) => getCourseOrUnitName(row),
+      key: "intake_id",
+      header: "Intake",
+      render: (row) => getIntakeName(row.intake_id),
     },
     {
-      key: "enrollmentDate",
+      key: "enrollment_date",
       header: "Enrollment Date",
-      render: (row) => format(new Date(row.enrollmentDate), "MMM dd, yyyy"),
+      render: (row) => format(new Date(row.enrollment_date), "MMM dd, yyyy"),
     },
     {
       key: "status",
@@ -362,51 +341,41 @@ function StudentEnrollmentView() {
       render: (row) => getStatusBadge(row.status),
     },
     {
-      key: "paymentStatus",
+      key: "payment_status",
       header: "Payment Status",
-      render: (row) => getPaymentBadge(row.paymentStatus),
+      render: (row) => getPaymentBadge(row.payment_status),
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Enrollment"
-        description="Browse available courses and manage your enrollments."
+        description="Browse available intakes and manage your enrollments."
       />
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">School</Label>
-          <Select value={schoolFilter} onValueChange={setSchoolFilter}>
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="All Schools" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Schools</SelectItem>
-              {mockSchools
-                .filter((s) => s.status === "active")
-                .map((school) => (
-                  <SelectItem key={school.id} value={school.id}>
-                    {school.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Duration</Label>
-          <Select value={durationFilter} onValueChange={setDurationFilter}>
+          <Label className="text-xs text-muted-foreground">Year Level</Label>
+          <Select value={yearFilter} onValueChange={setYearFilter}>
             <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="All Durations" />
+              <SelectValue placeholder="All Years" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Durations</SelectItem>
-              <SelectItem value="short">Short (≤ 12 months)</SelectItem>
-              <SelectItem value="medium">Medium (1-3 years)</SelectItem>
-              <SelectItem value="long">Long (3+ years)</SelectItem>
+              <SelectItem value="all">All Years</SelectItem>
+              <SelectItem value="1">Year 1</SelectItem>
+              <SelectItem value="2">Year 2</SelectItem>
+              <SelectItem value="3">Year 3</SelectItem>
+              <SelectItem value="4">Year 4</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -427,38 +396,45 @@ function StudentEnrollmentView() {
         </div>
       </div>
 
-      {/* Available Courses Grid */}
+      {/* Available Intakes Grid */}
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Available Courses</h2>
-        {availableCourses.length === 0 ? (
+        <h2 className="text-lg font-semibold">Available Intakes</h2>
+        {availableIntakes.length === 0 ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center text-muted-foreground shadow-soft">
-            <p>No courses match your filters.</p>
+            <p>No intakes match your filters.</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {availableCourses.map((course) => (
-              <Card key={course.id} className="flex flex-col">
+            {availableIntakes.map((intake) => (
+              <Card key={intake.id} className="flex flex-col">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base leading-tight">{course.title}</CardTitle>
-                  <p className="text-xs text-muted-foreground">{getSchoolName(course.schoolId)}</p>
+                  <CardTitle className="text-base leading-tight">{intake.name}</CardTitle>
+                  <p className="text-xs text-muted-foreground">Year {intake.year_level}</p>
                 </CardHeader>
                 <CardContent className="flex-1 space-y-2 pb-3">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>{getDurationLabel(course)}</span>
+                    <BookOpen className="h-3.5 w-3.5" />
+                    <span className="truncate">{getIntakeCourseNames(intake)}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <CreditCard className="h-3.5 w-3.5" />
-                    <span>{formatUGX(course.fee)}</span>
+                    <span>{formatUGX(intake.fee)}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <BookOpen className="h-3.5 w-3.5" />
-                    <span>{course.unitIds.length} units</span>
+                    <Users className="h-3.5 w-3.5" />
+                    <span>{intake.enrolled_count} / {intake.capacity} enrolled</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>
+                      {format(new Date(intake.start_date), "MMM dd, yyyy")} –{" "}
+                      {format(new Date(intake.end_date), "MMM dd, yyyy")}
+                    </span>
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button className="w-full" onClick={() => handleEnrollClick(course)}>
-                    Enroll
+                  <Button className="w-full" onClick={() => navigate(`/dashboard/enrollment/${intake.id}`)}>
+                    View Courses
                   </Button>
                 </CardFooter>
               </Card>
@@ -473,15 +449,22 @@ function StudentEnrollmentView() {
         <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
           <DataTable<Record<string, unknown>>
             columns={historyColumns as unknown as ColumnDef<Record<string, unknown>>[]}
-            data={myEnrollments as unknown as Record<string, unknown>[]}
-            searchableFields={["courseId"]}
+            data={enrollments as unknown as Record<string, unknown>[]}
+            searchableFields={["intake_id"]}
             searchPlaceholder="Search enrollments..."
             emptyMessage="You have no enrollments yet."
             rowActions={(row) => {
-              const enrollment = row as unknown as Enrollment;
+              const enrollment = row as unknown as ApiEnrollment;
               if (enrollment.status === "payment_pending") {
                 return (
-                  <Button size="sm" onClick={() => handleCompletePayment(enrollment)}>
+                  <Button
+                    size="sm"
+                    onClick={() => handleCompletePayment(enrollment)}
+                    disabled={paying === enrollment.id}
+                  >
+                    {paying === enrollment.id ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : null}
                     Complete Payment
                   </Button>
                 );
@@ -492,20 +475,6 @@ function StudentEnrollmentView() {
         </div>
       </div>
 
-      {/* Enrollment Confirmation Dialog */}
-      <ConfirmDialog
-        open={enrollDialogOpen}
-        onOpenChange={setEnrollDialogOpen}
-        title="Confirm Enrollment"
-        description={
-          selectedCourse
-            ? `You are about to enroll in "${selectedCourse.title}". The fee is ${formatUGX(selectedCourse.fee)}. You will need to complete payment to activate your enrollment.`
-            : ""
-        }
-        confirmLabel="Confirm Enrollment"
-        onConfirm={handleConfirmEnroll}
-        destructive={false}
-      />
     </div>
   );
 }

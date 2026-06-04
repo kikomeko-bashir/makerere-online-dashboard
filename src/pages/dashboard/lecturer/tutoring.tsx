@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Star, Calendar, Clock } from "lucide-react";
+import { Calendar, Clock } from "lucide-react";
 
-import type { TutoringSession, TutoringSessionStatus } from "@/lib/types";
-import { mockTutoringSessions, mockTutorProfiles, mockUsers } from "@/lib/mock-data";
 import { useAuth } from "@/lib/auth-context";
+import { api, type ApiTutoringBooking, type ApiTutorPublic } from "@/lib/api";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DataTable, type ColumnDef } from "@/components/dashboard/data-table";
 import { EntityFormDialog } from "@/components/dashboard/entity-form-dialog";
@@ -14,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -27,7 +27,7 @@ function formatUGX(amount: number): string {
   return `UGX ${amount.toLocaleString()}`;
 }
 
-function getStatusBadge(status: TutoringSessionStatus) {
+function getStatusBadge(status: string) {
   switch (status) {
     case "upcoming":
       return (
@@ -43,50 +43,92 @@ function getStatusBadge(status: TutoringSessionStatus) {
       );
     case "cancelled":
       return <Badge variant="secondary">Cancelled</Badge>;
+    default:
+      return <Badge variant="secondary">{status}</Badge>;
   }
 }
 
 // ─── Lecturer View ─────────────────────────────────────────────────────────────
 
 function LecturerTutoringView() {
-  const { user } = useAuth();
+  const [bookings, setBookings] = useState<ApiTutoringBooking[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(true);
 
-  const sessions = mockTutoringSessions.filter((s) => s.tutorId === user.id);
-  const tutorProfile = mockTutorProfiles.find((p) => p.userId === user.id);
+  const [hourlyRate, setHourlyRate] = useState(50000);
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [bio, setBio] = useState("");
+  const [isAvailable, setIsAvailable] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
-  const [hourlyRate, setHourlyRate] = useState(tutorProfile?.hourlyRate ?? 50000);
-  const [subjects, setSubjects] = useState<string[]>(tutorProfile?.subjects ?? []);
+  // Fetch bookings for this tutor
+  useEffect(() => {
+    setLoadingBookings(true);
+    api
+      .getTutoringBookings()
+      .then((data) => setBookings(data))
+      .catch(() => setBookings([]))
+      .finally(() => setLoadingBookings(false));
+  }, []);
 
-  const allSubjects = [
-    "Data Structures",
-    "Database Systems",
-    "Web Development",
-    "Software Engineering",
-    "Structural Analysis",
-    "Machine Learning",
-    "Marketing",
-    "Research Methods",
-    "Financial Accounting",
-    "Constitutional Law",
-    "Curriculum Development",
-  ];
+  // Fetch course units to use as available subjects
+  useEffect(() => {
+    api.getCourseUnits()
+      .then((units) => {
+        const unitTitles = units
+          .filter((u) => u.status === "active")
+          .map((u) => u.title);
+        setAvailableSubjects(unitTitles);
+      })
+      .catch(() => setAvailableSubjects([]));
+  }, []);
 
-  const getStudentName = (studentId: string) => {
-    const student = mockUsers.find((u) => u.id === studentId);
-    return student?.name ?? "Unknown Student";
+  // Load existing profile on mount
+  useEffect(() => {
+    api
+      .getMyTutorProfile()
+      .then((profile) => {
+        setSubjects(profile.subjects);
+        setHourlyRate(profile.hourly_rate);
+        setBio(profile.bio);
+        setIsAvailable(profile.is_available);
+      })
+      .catch(() => {
+        // No profile yet — keep defaults
+      });
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.updateMyTutorProfile({
+        subjects,
+        hourly_rate: hourlyRate,
+        bio,
+        is_available: isAvailable,
+      });
+      toast.success("Tutoring profile saved!", {
+        description: "Your tutoring settings have been updated.",
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save profile";
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const columns: ColumnDef<TutoringSession>[] = [
+  const columns: ColumnDef<ApiTutoringBooking>[] = [
     {
-      key: "studentId",
-      header: "Student Name",
-      render: (row) => getStudentName(row.studentId),
+      key: "student_id",
+      header: "Student",
+      render: (row) => row.student_id.slice(0, 8) + "…",
     },
     { key: "subject", header: "Subject" },
     {
       key: "date",
       header: "Date/Time",
-      render: (row) => `${format(new Date(row.date), "MMM d, yyyy")} at ${row.timeSlot}`,
+      render: (row) => `${format(new Date(row.date), "MMM d, yyyy")} at ${row.time_slot}`,
     },
     {
       key: "duration",
@@ -116,10 +158,10 @@ function LecturerTutoringView() {
         <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
           <DataTable<Record<string, unknown>>
             columns={columns as unknown as ColumnDef<Record<string, unknown>>[]}
-            data={sessions as unknown as Record<string, unknown>[]}
+            data={bookings as unknown as Record<string, unknown>[]}
             searchableFields={["subject"]}
             searchPlaceholder="Search sessions..."
-            emptyMessage="No tutoring sessions found."
+            emptyMessage={loadingBookings ? "Loading sessions..." : "No tutoring sessions found."}
           />
         </div>
       </div>
@@ -129,11 +171,26 @@ function LecturerTutoringView() {
         <h2 className="text-lg font-semibold">Tutoring Settings</h2>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
           <div className="space-y-6">
+            {/* Available for Tutoring Toggle */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="available-toggle"
+                checked={isAvailable}
+                onCheckedChange={(checked) => setIsAvailable(checked === true)}
+              />
+              <label
+                htmlFor="available-toggle"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Available for Tutoring
+              </label>
+            </div>
+
             {/* Available Subjects */}
             <div className="space-y-3">
               <Label className="text-sm font-medium">Available Subjects</Label>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {allSubjects.map((subject) => (
+                {availableSubjects.map((subject) => (
                   <div key={subject} className="flex items-center space-x-2">
                     <Checkbox
                       id={`subject-${subject}`}
@@ -164,31 +221,23 @@ function LecturerTutoringView() {
               />
             </div>
 
-            {/* Weekly Availability */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Weekly Availability</Label>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {(
-                  [
-                    "monday",
-                    "tuesday",
-                    "wednesday",
-                    "thursday",
-                    "friday",
-                    "saturday",
-                    "sunday",
-                  ] as const
-                ).map((day) => (
-                  <div key={day} className="rounded-lg border p-3">
-                    <p className="mb-1 text-sm font-medium capitalize">{day}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {tutorProfile?.availability[day]?.length
-                        ? tutorProfile.availability[day].join(", ")
-                        : "Not available"}
-                    </p>
-                  </div>
-                ))}
-              </div>
+            {/* Bio */}
+            <div className="space-y-2">
+              <Label htmlFor="tutor-bio">Bio</Label>
+              <Textarea
+                id="tutor-bio"
+                placeholder="Describe your tutoring approach, experience, and what students can expect..."
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={4}
+              />
+            </div>
+
+            {/* Save Button */}
+            <div>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save Settings"}
+              </Button>
             </div>
           </div>
         </div>
@@ -216,20 +265,46 @@ const emptyBookingForm: BookingFormData = {
 };
 
 function StudentTutoringView() {
-  const { user } = useAuth();
+  const [bookings, setBookings] = useState<ApiTutoringBooking[]>([]);
+  const [tutors, setTutors] = useState<ApiTutorPublic[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(true);
+  const [loadingTutors, setLoadingTutors] = useState(true);
 
-  const [sessions, setSessions] = useState<TutoringSession[]>([...mockTutoringSessions]);
   const [formOpen, setFormOpen] = useState(false);
   const [formData, setFormData] = useState<BookingFormData>(emptyBookingForm);
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  // Student's sessions
-  const mySessions = sessions.filter((s) => s.studentId === user.id);
-  const upcomingSessions = mySessions.filter((s) => s.status === "upcoming");
-  const pastSessions = mySessions.filter((s) => s.status !== "upcoming");
+  // Fetch bookings
+  const fetchBookings = () => {
+    setLoadingBookings(true);
+    api
+      .getTutoringBookings()
+      .then((data) => setBookings(data))
+      .catch(() => setBookings([]))
+      .finally(() => setLoadingBookings(false));
+  };
+
+  useEffect(() => {
+    fetchBookings();
+  }, []);
+
+  // Fetch available tutors
+  useEffect(() => {
+    setLoadingTutors(true);
+    api
+      .getPublicTutors()
+      .then((data) => setTutors(data))
+      .catch(() => setTutors([]))
+      .finally(() => setLoadingTutors(false));
+  }, []);
+
+  // Student's sessions split by status
+  const upcomingSessions = bookings.filter((b) => b.status === "upcoming");
+  const pastSessions = bookings.filter((b) => b.status !== "upcoming");
 
   // Selected tutor for booking
-  const selectedTutor = mockTutorProfiles.find((t) => t.id === formData.tutorId);
+  const selectedTutor = tutors.find((t) => t.id === formData.tutorId);
 
   const handleBookSession = (tutorId: string) => {
     setFormData({ ...emptyBookingForm, tutorId });
@@ -237,7 +312,7 @@ function StudentTutoringView() {
     setFormOpen(true);
   };
 
-  const handleSubmitBooking = () => {
+  const handleSubmitBooking = async () => {
     const newErrors: Partial<Record<string, string>> = {};
     if (!formData.subject) newErrors.subject = "Subject is required";
     if (!formData.date) newErrors.date = "Date is required";
@@ -248,42 +323,44 @@ function StudentTutoringView() {
       return;
     }
 
-    const tutor = mockTutorProfiles.find((t) => t.id === formData.tutorId);
-    if (!tutor) return;
+    if (!selectedTutor) return;
 
-    const newSession: TutoringSession = {
-      id: `ts-${Date.now()}`,
-      tutorId: tutor.userId,
-      studentId: user.id,
-      subject: formData.subject,
-      date: formData.date,
-      timeSlot: formData.timeSlot,
-      duration: formData.duration,
-      hourlyRate: tutor.hourlyRate,
-      status: "upcoming",
-    };
-
-    setSessions((prev) => [...prev, newSession]);
-    toast.success("Session booked!", {
-      description: `${formData.duration}hr session with ${tutor.name} on ${format(new Date(formData.date), "MMM d, yyyy")} at ${formData.timeSlot}. Payment of ${formatUGX(tutor.hourlyRate * formData.duration)} will be processed.`,
-    });
-    setFormOpen(false);
+    setSubmitting(true);
+    try {
+      await api.createTutoringBooking({
+        tutor_profile_id: selectedTutor.id,
+        subject: formData.subject,
+        date: formData.date,
+        time_slot: formData.timeSlot,
+        duration: formData.duration,
+      });
+      toast.success("Session booked!", {
+        description: `${formData.duration}hr session with ${selectedTutor.name} on ${format(new Date(formData.date), "MMM d, yyyy")} at ${formData.timeSlot}. Payment of ${formatUGX(selectedTutor.hourly_rate * formData.duration)} will be processed.`,
+      });
+      setFormOpen(false);
+      fetchBookings();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to book session";
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const sessionColumns: ColumnDef<TutoringSession>[] = [
+  const sessionColumns: ColumnDef<ApiTutoringBooking>[] = [
     {
-      key: "tutorId",
+      key: "tutor_profile_id",
       header: "Tutor",
       render: (row) => {
-        const tutor = mockUsers.find((u) => u.id === row.tutorId);
-        return tutor?.name ?? "Unknown";
+        const tutor = tutors.find((t) => t.id === row.tutor_profile_id);
+        return tutor?.name ?? row.tutor_profile_id.slice(0, 8) + "…";
       },
     },
     { key: "subject", header: "Subject" },
     {
       key: "date",
       header: "Date/Time",
-      render: (row) => `${format(new Date(row.date), "MMM d, yyyy")} at ${row.timeSlot}`,
+      render: (row) => `${format(new Date(row.date), "MMM d, yyyy")} at ${row.time_slot}`,
     },
     {
       key: "duration",
@@ -291,9 +368,9 @@ function StudentTutoringView() {
       render: (row) => `${row.duration} hr${row.duration > 1 ? "s" : ""}`,
     },
     {
-      key: "hourlyRate",
+      key: "total_cost",
       header: "Cost",
-      render: (row) => formatUGX(row.hourlyRate * row.duration),
+      render: (row) => formatUGX(row.total_cost),
     },
     {
       key: "status",
@@ -309,21 +386,16 @@ function StudentTutoringView() {
       {/* Available Tutors */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Available Tutors</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {mockTutorProfiles.map((tutor) => {
-            // Check if tutor has any availability
-            const hasAvailability = Object.values(tutor.availability).some(
-              (slots) => slots.length > 0,
-            );
-
-            return (
+        {loadingTutors ? (
+          <p className="text-sm text-muted-foreground">Loading tutors...</p>
+        ) : tutors.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No tutors available at the moment.</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {tutors.map((tutor) => (
               <Card key={tutor.id} className="flex flex-col">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">{tutor.name}</CardTitle>
-                  <div className="flex items-center gap-1">
-                    <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                    <span className="text-sm text-muted-foreground">{tutor.rating.toFixed(1)}</span>
-                  </div>
                 </CardHeader>
                 <CardContent className="flex-1 space-y-2 pb-3">
                   <div className="flex flex-wrap gap-1">
@@ -335,11 +407,14 @@ function StudentTutoringView() {
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="h-3.5 w-3.5" />
-                    <span>{formatUGX(tutor.hourlyRate)}/hr</span>
+                    <span>{formatUGX(tutor.hourly_rate)}/hr</span>
                   </div>
+                  {tutor.bio && (
+                    <p className="text-xs text-muted-foreground line-clamp-2">{tutor.bio}</p>
+                  )}
                   <div className="flex items-center gap-2 text-sm">
                     <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                    {hasAvailability ? (
+                    {tutor.is_available ? (
                       <Badge className="border-transparent bg-green-100 text-green-800 hover:bg-green-100">
                         Available
                       </Badge>
@@ -351,16 +426,16 @@ function StudentTutoringView() {
                 <CardFooter>
                   <Button
                     className="w-full"
-                    disabled={!hasAvailability}
+                    disabled={!tutor.is_available}
                     onClick={() => handleBookSession(tutor.id)}
                   >
                     Book Session
                   </Button>
                 </CardFooter>
               </Card>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Upcoming Sessions */}
@@ -386,7 +461,7 @@ function StudentTutoringView() {
             data={pastSessions as unknown as Record<string, unknown>[]}
             searchableFields={["subject"]}
             searchPlaceholder="Search sessions..."
-            emptyMessage="No past sessions."
+            emptyMessage={loadingBookings ? "Loading sessions..." : "No past sessions."}
           />
         </div>
       </div>
@@ -474,10 +549,10 @@ function StudentTutoringView() {
             <div className="rounded-lg border bg-muted/50 p-3">
               <p className="text-sm font-medium">Estimated Cost</p>
               <p className="text-lg font-bold text-primary">
-                {formatUGX(selectedTutor.hourlyRate * formData.duration)}
+                {formatUGX(selectedTutor.hourly_rate * formData.duration)}
               </p>
               <p className="text-xs text-muted-foreground">
-                {formatUGX(selectedTutor.hourlyRate)}/hr × {formData.duration} hr
+                {formatUGX(selectedTutor.hourly_rate)}/hr × {formData.duration} hr
                 {formData.duration > 1 ? "s" : ""}
               </p>
             </div>
