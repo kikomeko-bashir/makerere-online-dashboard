@@ -296,6 +296,11 @@ function getStudentNavigation(): NavGroup[] {
           icon: BookOpen,
         },
         {
+          title: "Available Courses",
+          href: "/dashboard/available-courses",
+          icon: GraduationCap,
+        },
+        {
           title: "Enrollment",
           href: "/dashboard/enrollment",
           icon: UserPlus,

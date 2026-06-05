@@ -79,6 +79,9 @@ const DashboardSettings = React.lazy(
   () => import("@/pages/dashboard/admin/settings"),
 );
 const DashboardAdmins = React.lazy(() => import("@/pages/dashboard/admin/admins"));
+const StudentAvailableCourses = React.lazy(
+  () => import("@/pages/dashboard/student/available-courses"),
+);
 const StudentCourseDetail = React.lazy(
   () => import("@/pages/dashboard/student/course-detail"),
 );
@@ -238,6 +241,7 @@ export default function App() {
           <Route path="intakes/:intakeId" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardIntakeDetail /></RoleGuard>} />
           <Route path="enrollment" element={<DashboardEnrollment />} />
           <Route path="enrollment/:intakeId" element={<EnrollmentIntake />} />
+          <Route path="available-courses" element={<RoleGuard allowedRoles={["student"]}><StudentAvailableCourses /></RoleGuard>} />
           <Route path="materials" element={<DashboardMaterials />} />
           <Route path="virtual-learning" element={<DashboardVirtualLearning />} />
           <Route path="examinations" element={<DashboardExaminations />} />
