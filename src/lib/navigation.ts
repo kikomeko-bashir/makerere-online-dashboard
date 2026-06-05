@@ -263,6 +263,16 @@ function getLecturerNavigation(): NavGroup[] {
       ],
     },
     {
+      label: "Finance",
+      items: [
+        {
+          title: "My Wallet",
+          href: "/dashboard/payments",
+          icon: CreditCard,
+        },
+      ],
+    },
+    {
       label: "Communication",
       items: [
         {

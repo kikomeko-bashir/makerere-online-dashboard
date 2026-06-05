@@ -425,6 +425,86 @@ export const api = {
   deleteAssessment: (id: string) =>
     request<void>("/api/assessments/" + id, { method: "DELETE" }),
 
+  // Assessment Questions
+  getAssessmentQuestions: (assessmentId: string) =>
+    request<Array<{
+      id: string;
+      assessment_id: string;
+      question_text: string;
+      question_type: string;
+      options: string[];
+      correct_answer?: string;
+      marks: number;
+      order: number;
+      created_at?: string;
+    }>>(`/api/assessment-questions?assessment_id=${assessmentId}`),
+
+  createAssessmentQuestion: (data: {
+    assessment_id: string;
+    question_text: string;
+    question_type: string;
+    options: string[];
+    correct_answer: string;
+    marks: number;
+    order: number;
+  }) =>
+    request<unknown>("/api/assessment-questions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateAssessmentQuestion: (id: string, data: {
+    question_text?: string;
+    options?: string[];
+    correct_answer?: string;
+    marks?: number;
+    order?: number;
+  }) =>
+    request<unknown>(`/api/assessment-questions/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteAssessmentQuestion: (id: string) =>
+    request<void>(`/api/assessment-questions/${id}`, { method: "DELETE" }),
+
+  // Assessment Submissions
+  getAssessmentSubmissions: (assessmentId: string) =>
+    request<Array<{
+      id: string;
+      assessment_id: string;
+      student_id: string;
+      answers: Array<{ question_id: string; answer: string }>;
+      score: number;
+      total_marks: number;
+      is_graded: boolean;
+      graded_by: string | null;
+      feedback: string;
+      submitted_at: string;
+      graded_at: string | null;
+    }>>(`/api/assessment-questions/submissions?assessment_id=${assessmentId}`),
+
+  submitAssessment: (data: {
+    assessment_id: string;
+    answers: Array<{ question_id: string; answer: string }>;
+  }) =>
+    request<{
+      id: string;
+      score: number;
+      total_marks: number;
+      is_graded: boolean;
+      feedback: string;
+    }>("/api/assessment-questions/submit", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  gradeSubmission: (submissionId: string, data: { score: number; feedback: string }) =>
+    request<unknown>(`/api/assessment-questions/submissions/${submissionId}/grade`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
   // Virtual Classes
   getVirtualClasses: (unitId: string) =>
     request<ApiVirtualClass[]>("/api/virtual-classes?course_unit_id=" + unitId),
@@ -512,6 +592,39 @@ export const api = {
       method: "PUT",
     }),
 
+  // Payments (Interswitch Mobile Money)
+  initiatePayment: (enrollmentId: string, phoneNumber: string) =>
+    request<{
+      id: string;
+      status: string;
+      amount: number;
+      carrier: string;
+      response_code: string | null;
+      response_message: string | null;
+      description: string;
+    }>("/api/payments/initiate", {
+      method: "POST",
+      body: JSON.stringify({ enrollment_id: enrollmentId, phone_number: phoneNumber }),
+    }),
+
+  getPayments: () =>
+    request<Array<{
+      id: string;
+      student_id: string;
+      enrollment_id: string | null;
+      amount: number;
+      currency: string;
+      phone_number: string;
+      carrier: string;
+      payment_type: string;
+      status: string;
+      request_reference: string | null;
+      response_message: string | null;
+      description: string;
+      created_at: string;
+      completed_at: string | null;
+    }>>("/api/payments"),
+
   deleteEnrollment: (id: string) =>
     request<void>("/api/enrollments/" + id, { method: "DELETE" }),
 
@@ -543,4 +656,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  // Payments (legacy methods kept for compatibility)
+  completePayment: (paymentId: string) =>
+    request<unknown>(`/api/payments/${paymentId}/complete`, {
+      method: "PUT",
+    }),
+
+  getSystemWallet: () =>
+    request<{ balance: number; currency: string; total_received: number; total_withdrawn: number }>("/api/payments/system-wallet"),
+
+  getLecturerWallet: () =>
+    request<{ balance: number; currency: string; total_earned: number }>("/api/payments/lecturer-wallet"),
+
+  getAllLecturerWallets: () =>
+    request<Array<{ id: string; lecturer_id: string; balance: number; currency: string; total_earned: number }>>("/api/payments/all-lecturer-wallets"),
 };

@@ -299,6 +299,13 @@ export default function StudentCourseUnitDetail() {
                       {format(new Date(assess.end_date), "MMM d, yyyy")}
                     </p>
                   )}
+                  <Button
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => navigate(`/dashboard/student-assessments/${assess.id}`)}
+                  >
+                    Start Assessment
+                  </Button>
                 </div>
               ))}
             </div>

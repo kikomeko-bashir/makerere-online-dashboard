@@ -333,7 +333,7 @@ export default function CourseUnitDetail() {
           ) : (
             <div className="space-y-2">
               {assessments.map((assess) => (
-                <div key={assess.id} className="flex items-center justify-between rounded-xl border p-4 hover:bg-muted/50">
+                <div key={assess.id} className="flex items-center justify-between rounded-xl border p-4 hover:bg-muted/50 cursor-pointer" onClick={() => navigate(`/dashboard/assessments/${assess.id}`)}>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium">{assess.title}</p>
@@ -344,7 +344,7 @@ export default function CourseUnitDetail() {
                     </p>
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => { setDeletingItem({ type: "assessment", id: assess.id, title: assess.title }); setDeleteOpen(true); }}>
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setDeletingItem({ type: "assessment", id: assess.id, title: assess.title }); setDeleteOpen(true); }}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
