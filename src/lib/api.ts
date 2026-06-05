@@ -192,6 +192,30 @@ export interface ApiError {
   detail: string;
 }
 
+export interface ApiCertificate {
+  id: string;
+  student_id: string;
+  certificate_type: string;
+  course_id: string | null;
+  course_unit_id: string | null;
+  certificate_number: string;
+  student_name: string;
+  title: string;
+  issue_date: string;
+  status: string;
+  created_at: string;
+}
+
+export interface ApiCertificateVerification {
+  valid: boolean;
+  certificate_number: string;
+  student_name: string | null;
+  title: string | null;
+  certificate_type: string | null;
+  issue_date: string | null;
+  status: string | null;
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -671,4 +695,42 @@ export const api = {
 
   getAllLecturerWallets: () =>
     request<Array<{ id: string; lecturer_id: string; balance: number; currency: string; total_earned: number }>>("/api/payments/all-lecturer-wallets"),
+
+  // Certificates
+  getCertificates: (params?: { student_id?: string; course_id?: string; certificate_type?: string; status?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.student_id) searchParams.set("student_id", params.student_id);
+    if (params?.course_id) searchParams.set("course_id", params.course_id);
+    if (params?.certificate_type) searchParams.set("certificate_type", params.certificate_type);
+    if (params?.status) searchParams.set("status", params.status);
+    const qs = searchParams.toString();
+    return request<ApiCertificate[]>(`/api/certificates${qs ? "?" + qs : ""}`);
+  },
+
+  issueCertificate: (data: {
+    student_id: string;
+    certificate_type: string;
+    course_id?: string;
+    course_unit_id?: string;
+    student_name: string;
+    title: string;
+  }) =>
+    request<ApiCertificate>("/api/certificates/issue", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  verifyCertificate: async (certificateNumber: string): Promise<ApiCertificateVerification> => {
+    const res = await fetch(`${API_BASE_URL}/api/certificates/verify/${encodeURIComponent(certificateNumber)}`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: "Verification failed" }));
+      throw new Error(error.detail);
+    }
+    return res.json();
+  },
+
+  getCertificate: (id: string) =>
+    request<ApiCertificate>(`/api/certificates/${id}`),
 };

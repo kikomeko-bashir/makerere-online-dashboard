@@ -97,6 +97,9 @@ const StudentCourseUnitDetail = React.lazy(
 const StudentAssessmentAttempt = React.lazy(
   () => import("@/pages/dashboard/student/assessment-attempt"),
 );
+const StudentCertificates = React.lazy(
+  () => import("@/pages/dashboard/student/certificates"),
+);
 const DashboardStudent = React.lazy(() => import("@/pages/dashboard/legacy/student"));
 const DashboardTeacher = React.lazy(() => import("@/pages/dashboard/legacy/teacher"));
 const DashboardAdmin = React.lazy(() => import("@/pages/dashboard/legacy/admin"));
@@ -261,7 +264,8 @@ export default function App() {
           />
           <Route path="assessments/:assessmentId" element={<RoleGuard allowedRoles={["super_admin", "admin", "lecturer"]}><LecturerAssessmentDetail /></RoleGuard>} />
           <Route path="student-assessments/:assessmentId" element={<RoleGuard allowedRoles={["student"]}><StudentAssessmentAttempt /></RoleGuard>} />
-          <Route path="certificates" element={<DashboardCertificates />} />
+          <Route path="certificates" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardCertificates /></RoleGuard>} />
+          <Route path="student-certificates" element={<RoleGuard allowedRoles={["student"]}><StudentCertificates /></RoleGuard>} />
           <Route path="payments" element={<DashboardPayments />} />
           <Route path="tutoring" element={<RoleGuard allowedRoles={["lecturer", "student"]}><DashboardTutoring /></RoleGuard>} />
           <Route path="tutor-management" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardTutorManagement /></RoleGuard>} />

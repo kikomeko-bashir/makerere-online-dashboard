@@ -47,10 +47,12 @@ export function DashboardHeader() {
       <Breadcrumb className="flex-1">
         <BreadcrumbList>
           {crumbs.map((crumb, index) => (
-            <BreadcrumbItem key={index}>
+            <span key={index} className="inline-flex items-center gap-1.5">
               {index > 0 && <BreadcrumbSeparator />}
-              <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-            </BreadcrumbItem>
+              <BreadcrumbItem>
+                <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </span>
           ))}
         </BreadcrumbList>
       </Breadcrumb>

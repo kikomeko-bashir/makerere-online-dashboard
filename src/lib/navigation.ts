@@ -332,7 +332,7 @@ function getStudentNavigation(): NavGroup[] {
         },
         {
           title: "Certificates",
-          href: "/dashboard/certificates",
+          href: "/dashboard/student-certificates",
           icon: GraduationCap,
         },
         {
