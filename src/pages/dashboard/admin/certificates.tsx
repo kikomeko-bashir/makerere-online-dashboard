@@ -31,6 +31,24 @@ import crest from "@/assets/makerere-logo.png";
 
 // ─── PDF Download Helper ──────────────────────────────────────────────────────
 
+function loadImageAsBase64(src: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject("Canvas not supported"); return; }
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject("Failed to load image");
+    img.src = src;
+  });
+}
+
 async function downloadCertificatePDF(cert: ApiCertificate) {
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const w = pdf.internal.pageSize.getWidth();
@@ -53,61 +71,65 @@ async function downloadCertificatePDF(cert: ApiCertificate) {
   // Corner decorations (gold)
   pdf.setDrawColor(196, 160, 60);
   pdf.setLineWidth(0.8);
-  // Top-left
   pdf.line(18, 16, 18, 26); pdf.line(18, 16, 28, 16);
-  // Top-right
   pdf.line(w - 18, 16, w - 18, 26); pdf.line(w - 18, 16, w - 28, 16);
-  // Bottom-left
   pdf.line(18, h - 16, 18, h - 26); pdf.line(18, h - 16, 28, h - 16);
-  // Bottom-right
   pdf.line(w - 18, h - 16, w - 18, h - 26); pdf.line(w - 18, h - 16, w - 28, h - 16);
 
-  // School name
+  // Add logo
+  try {
+    const logoBase64 = await loadImageAsBase64(crest);
+    pdf.addImage(logoBase64, "PNG", w / 2 - 8, 20, 16, 16);
+  } catch {
+    // Skip logo if loading fails
+  }
+
+  // School name (below logo)
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(18);
   pdf.setTextColor(107, 29, 29);
-  pdf.text("MAKERERE ONLINE SCHOOL", w / 2, 38, { align: "center" });
+  pdf.text("MAKERERE ONLINE SCHOOL", w / 2, 44, { align: "center" });
 
   // Gold divider
   pdf.setDrawColor(196, 160, 60);
   pdf.setLineWidth(0.5);
-  pdf.line(w / 2 - 40, 44, w / 2 + 40, 44);
+  pdf.line(w / 2 - 40, 49, w / 2 + 40, 49);
 
   // Certificate of Completion
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(10);
   pdf.setTextColor(196, 160, 60);
-  pdf.text("CERTIFICATE OF COMPLETION", w / 2, 52, { align: "center" });
+  pdf.text("CERTIFICATE OF COMPLETION", w / 2, 56, { align: "center" });
 
   // "This is to certify that"
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(11);
   pdf.setTextColor(107, 114, 128);
-  pdf.text("This is to certify that", w / 2, 68, { align: "center" });
+  pdf.text("This is to certify that", w / 2, 70, { align: "center" });
 
   // Student name
   pdf.setFont("times", "bold");
   pdf.setFontSize(26);
   pdf.setTextColor(31, 41, 55);
-  pdf.text(cert.student_name, w / 2, 82, { align: "center" });
+  pdf.text(cert.student_name, w / 2, 84, { align: "center" });
 
   // "has successfully completed the course/unit"
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(11);
   pdf.setTextColor(107, 114, 128);
   const typeText = cert.certificate_type === "course" ? "course" : "course unit";
-  pdf.text(`has successfully completed the ${typeText}`, w / 2, 94, { align: "center" });
+  pdf.text(`has successfully completed the ${typeText}`, w / 2, 96, { align: "center" });
 
   // Course/unit title
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(16);
   pdf.setTextColor(107, 29, 29);
-  pdf.text(cert.title, w / 2, 106, { align: "center" });
+  pdf.text(cert.title, w / 2, 108, { align: "center" });
 
   // Gold divider
   pdf.setDrawColor(196, 160, 60);
   pdf.setLineWidth(0.5);
-  pdf.line(w / 2 - 40, 114, w / 2 + 40, 114);
+  pdf.line(w / 2 - 40, 115, w / 2 + 40, 115);
 
   // Issue date
   pdf.setFont("helvetica", "normal");
@@ -125,10 +147,10 @@ async function downloadCertificatePDF(cert: ApiCertificate) {
   // Footer — status
   if (cert.status === "active") {
     pdf.setTextColor(5, 150, 105);
-    pdf.text("✓ Verified", w - 30, h - 22, { align: "right" });
+    pdf.text("Verified", w - 30, h - 22, { align: "right" });
   } else {
     pdf.setTextColor(220, 38, 38);
-    pdf.text("✗ Revoked", w - 30, h - 22, { align: "right" });
+    pdf.text("Revoked", w - 30, h - 22, { align: "right" });
   }
 
   pdf.save(`Certificate-${cert.certificate_number}.pdf`);
@@ -336,7 +358,7 @@ export default function DashboardCertificates() {
   async function handleDownload(cert: ApiCertificate) {
     setDownloading(true);
     try {
-      downloadCertificatePDF(cert);
+      await downloadCertificatePDF(cert);
       toast.success("Certificate downloaded!");
     } catch {
       toast.error("PDF generation failed");
@@ -348,7 +370,7 @@ export default function DashboardCertificates() {
   async function handleDownloadSample() {
     setDownloading(true);
     try {
-      downloadCertificatePDF(sampleCert);
+      await downloadCertificatePDF(sampleCert);
       toast.success("Sample certificate downloaded!");
     } catch {
       toast.error("PDF generation failed");
