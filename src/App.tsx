@@ -48,6 +48,9 @@ const EnrollmentIntake = React.lazy(
 const DashboardMaterials = React.lazy(
   () => import("@/pages/dashboard/lecturer/materials"),
 );
+const StudentMaterials = React.lazy(
+  () => import("@/pages/dashboard/student/materials"),
+);
 const DashboardVirtualLearning = React.lazy(
   () => import("@/pages/dashboard/lecturer/virtual-learning"),
 );
@@ -242,7 +245,8 @@ export default function App() {
           <Route path="enrollment" element={<DashboardEnrollment />} />
           <Route path="enrollment/:intakeId" element={<EnrollmentIntake />} />
           <Route path="available-courses" element={<RoleGuard allowedRoles={["student"]}><StudentAvailableCourses /></RoleGuard>} />
-          <Route path="materials" element={<DashboardMaterials />} />
+          <Route path="materials" element={<RoleGuard allowedRoles={["super_admin", "admin", "lecturer"]}><DashboardMaterials /></RoleGuard>} />
+          <Route path="student-materials" element={<RoleGuard allowedRoles={["student"]}><StudentMaterials /></RoleGuard>} />
           <Route path="virtual-learning" element={<DashboardVirtualLearning />} />
           <Route path="examinations" element={<DashboardExaminations />} />
           <Route

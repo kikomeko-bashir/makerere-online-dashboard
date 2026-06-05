@@ -397,8 +397,11 @@ export const api = {
     }),
 
   // Study Materials
-  getMaterials: (unitId: string) =>
-    request<ApiMaterial[]>("/api/materials?course_unit_id=" + unitId),
+  getMaterials: (unitId?: string) =>
+    request<ApiMaterial[]>(unitId ? "/api/materials?course_unit_id=" + unitId : "/api/materials"),
+
+  getAllMyMaterials: () =>
+    request<ApiMaterial[]>("/api/materials"),
 
   createMaterial: (data: Omit<ApiMaterial, "id" | "uploaded_by" | "created_at">) =>
     request<ApiMaterial>("/api/materials", {

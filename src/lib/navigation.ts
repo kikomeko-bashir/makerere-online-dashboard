@@ -307,7 +307,7 @@ function getStudentNavigation(): NavGroup[] {
         },
         {
           title: "Study Materials",
-          href: "/dashboard/materials",
+          href: "/dashboard/student-materials",
           icon: FileText,
         },
         {
