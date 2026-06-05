@@ -86,6 +86,11 @@ function getSuperAdminNavigation(): NavGroup[] {
           icon: UserPlus,
         },
         {
+          title: "Tutor Management",
+          href: "/dashboard/tutor-management",
+          icon: Users,
+        },
+        {
           title: "System Settings",
           href: "/dashboard/settings",
           icon: Settings,
@@ -154,6 +159,11 @@ function getAdminNavigation(): NavGroup[] {
           title: "Enrollment",
           href: "/dashboard/enrollment",
           icon: UserPlus,
+        },
+        {
+          title: "Tutor Management",
+          href: "/dashboard/tutor-management",
+          icon: Users,
         },
         {
           title: "Study Materials",

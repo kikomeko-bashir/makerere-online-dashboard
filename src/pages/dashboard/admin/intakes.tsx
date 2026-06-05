@@ -33,8 +33,8 @@ type IntakeFormData = {
   year_level: number;
   start_date: string;
   end_date: string;
+  enrollment_deadline: string;
   capacity: number;
-  fee: number;
   course_ids: string[];
   status: string;
 };
@@ -44,8 +44,8 @@ const emptyForm: IntakeFormData = {
   year_level: 1,
   start_date: "",
   end_date: "",
+  enrollment_deadline: "",
   capacity: 100,
-  fee: 0,
   course_ids: [],
   status: "active",
 };
@@ -103,10 +103,6 @@ export default function DashboardIntakes() {
     }
   };
 
-  const formatFee = (fee: number) => {
-    return `UGX ${fee.toLocaleString()}`;
-  };
-
   const columns: ColumnDef<ApiIntake>[] = [
     { key: "name", header: "Intake Name" },
     {
@@ -133,13 +129,13 @@ export default function DashboardIntakes() {
       header: "End Date",
       render: (row) => formatDate(row.end_date),
     },
+    {
+      key: "enrollment_deadline",
+      header: "Enrollment Deadline",
+      render: (row) => formatDate(row.enrollment_deadline),
+    },
     { key: "capacity", header: "Capacity" },
     { key: "enrolled_count", header: "Enrolled" },
-    {
-      key: "fee",
-      header: "Fee (UGX)",
-      render: (row) => formatFee(row.fee),
-    },
     {
       key: "status",
       header: "Status",
@@ -165,8 +161,8 @@ export default function DashboardIntakes() {
       year_level: intake.year_level,
       start_date: intake.start_date,
       end_date: intake.end_date,
+      enrollment_deadline: intake.enrollment_deadline,
       capacity: intake.capacity,
-      fee: intake.fee,
       course_ids: intake.course_ids,
       status: intake.status,
     });
@@ -193,6 +189,12 @@ export default function DashboardIntakes() {
     }
     if (formData.start_date && formData.end_date && formData.end_date <= formData.start_date) {
       newErrors.end_date = "End date must be after start date";
+    }
+    if (!formData.enrollment_deadline) {
+      newErrors.enrollment_deadline = "Enrollment deadline is required";
+    }
+    if (formData.enrollment_deadline && formData.end_date && formData.enrollment_deadline > formData.end_date) {
+      newErrors.enrollment_deadline = "Deadline must be before or on end date";
     }
     if (formData.capacity < 1) {
       newErrors.capacity = "Capacity must be at least 1";
@@ -418,16 +420,19 @@ export default function DashboardIntakes() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="intake-fee">Fee (UGX)</Label>
+            <Label htmlFor="intake-deadline">Enrollment Deadline</Label>
             <Input
-              id="intake-fee"
-              type="number"
-              min={0}
-              value={formData.fee}
+              id="intake-deadline"
+              type="date"
+              value={formData.enrollment_deadline}
               onChange={(e) =>
-                setFormData((f) => ({ ...f, fee: Number(e.target.value) }))
+                setFormData((f) => ({ ...f, enrollment_deadline: e.target.value }))
               }
             />
+            <p className="text-xs text-muted-foreground">Students cannot enroll after this date.</p>
+            {errors.enrollment_deadline && (
+              <p className="text-xs text-destructive">{errors.enrollment_deadline}</p>
+            )}
           </div>
 
           <div className="space-y-2">

@@ -1,6 +1,17 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "https://api.makerereonlineschool.com";
 
+/**
+ * Resolves a relative upload path (e.g. /uploads/abc.jpg) to the full URL.
+ * If already a full URL (http/https), returns as-is.
+ */
+export function resolveImageUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (path.startsWith("/uploads/")) return `${API_BASE_URL}${path}`;
+  return path;
+}
+
 export interface ApiUser {
   id: string;
   name: string;
@@ -58,9 +69,9 @@ export interface ApiIntake {
   year_level: number;
   start_date: string;
   end_date: string;
+  enrollment_deadline: string;
   capacity: number;
   enrolled_count: number;
-  fee: number;
   course_ids: string[];
   status: string;
   created_at: string;
@@ -138,6 +149,19 @@ export interface ApiTutorProfile {
   hourly_rate: number;
   bio: string;
   is_available: boolean;
+  approval_status: string;
+}
+
+export interface ApiTutorAdmin {
+  id: string;
+  user_id: string;
+  name: string;
+  subjects: string[];
+  hourly_rate: number;
+  bio: string;
+  is_available: boolean;
+  approval_status: string;
+  created_at: string | null;
 }
 
 export interface ApiEnrollment {
@@ -197,6 +221,28 @@ async function request<T>(
 }
 
 export const api = {
+  // File uploads
+  uploadImage: async (file: File): Promise<{ url: string; filename: string }> => {
+    const token = localStorage.getItem("access_token");
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`${API_BASE_URL}/api/uploads`, {
+      method: "POST",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: "Upload failed" }));
+      throw new Error(error.detail);
+    }
+
+    return res.json();
+  },
+
   login: (email: string, password: string) =>
     request<AuthResponse>("/api/auth/login", {
       method: "POST",
@@ -308,6 +354,23 @@ export const api = {
   deleteIntake: (id: string) =>
     request<void>("/api/intakes/" + id, { method: "DELETE" }),
 
+  // Public endpoints (no auth)
+  getPublicCourses: async (): Promise<ApiCourse[]> => {
+    const res = await fetch(`${API_BASE_URL}/api/courses/public`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error("Failed to load courses");
+    return res.json();
+  },
+
+  getPublicIntakes: async (): Promise<ApiIntake[]> => {
+    const res = await fetch(`${API_BASE_URL}/api/intakes/public`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error("Failed to load intakes");
+    return res.json();
+  },
+
   // Intake Unit Assignments (lecturer per unit per intake)
   getIntakeAssignments: (intakeId?: string) =>
     request<ApiIntakeAssignment[]>(
@@ -418,6 +481,20 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // Admin tutor management
+  getAdminTutors: () =>
+    request<ApiTutorAdmin[]>("/api/tutoring/admin/all"),
+
+  approveTutor: (profileId: string) =>
+    request<{ message: string }>(`/api/tutoring/admin/${profileId}/approve`, {
+      method: "PUT",
+    }),
+
+  rejectTutor: (profileId: string) =>
+    request<{ message: string }>(`/api/tutoring/admin/${profileId}/reject`, {
+      method: "PUT",
+    }),
+
   // Enrollments
   getEnrollments: () => request<ApiEnrollment[]>("/api/enrollments"),
 
@@ -434,6 +511,19 @@ export const api = {
 
   deleteEnrollment: (id: string) =>
     request<void>("/api/enrollments/" + id, { method: "DELETE" }),
+
+  getMyUnitEnrollments: (courseId?: string) =>
+    request<Array<{
+      id: string;
+      student_id: string;
+      enrollment_id: string;
+      course_unit_id: string;
+      course_id: string;
+      intake_id: string;
+      status: string;
+      enrolled_date: string;
+      created_at: string;
+    }>>(courseId ? `/api/enrollments/my-units?course_id=${courseId}` : "/api/enrollments/my-units"),
 
   // Tutoring Bookings
   getTutoringBookings: () =>

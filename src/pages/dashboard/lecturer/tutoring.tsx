@@ -58,7 +58,11 @@ function LecturerTutoringView() {
   const [subjects, setSubjects] = useState<string[]>([]);
   const [bio, setBio] = useState("");
   const [isAvailable, setIsAvailable] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
+  const [hasProfile, setHasProfile] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
   // Fetch bookings for this tutor
@@ -85,6 +89,7 @@ function LecturerTutoringView() {
 
   // Load existing profile on mount
   useEffect(() => {
+    setProfileLoading(true);
     api
       .getMyTutorProfile()
       .then((profile) => {
@@ -92,29 +97,51 @@ function LecturerTutoringView() {
         setHourlyRate(profile.hourly_rate);
         setBio(profile.bio);
         setIsAvailable(profile.is_available);
+        setApprovalStatus(profile.approval_status);
+        setHasProfile(true);
       })
       .catch(() => {
-        // No profile yet — keep defaults
-      });
+        // No profile yet
+        setHasProfile(false);
+        setApprovalStatus(null);
+      })
+      .finally(() => setProfileLoading(false));
   }, []);
 
-  const handleSave = async () => {
-    setSaving(true);
+  const handleSubmitApplication = async () => {
+    if (subjects.length === 0) {
+      toast.error("Please select at least one subject");
+      return;
+    }
+    if (!bio.trim()) {
+      toast.error("Please write a bio describing your tutoring experience");
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      await api.updateMyTutorProfile({
+      const profile = await api.updateMyTutorProfile({
         subjects,
         hourly_rate: hourlyRate,
         bio,
         is_available: isAvailable,
       });
-      toast.success("Tutoring profile saved!", {
-        description: "Your tutoring settings have been updated.",
-      });
+      setApprovalStatus(profile.approval_status);
+      setHasProfile(true);
+      setEditing(false);
+      toast.success(
+        hasProfile ? "Application updated!" : "Tutoring application submitted!",
+        {
+          description: hasProfile
+            ? "Your changes have been saved."
+            : "Your application is now pending admin approval.",
+        },
+      );
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to save profile";
+      const message = err instanceof Error ? err.message : "Failed to submit application";
       toast.error(message);
     } finally {
-      setSaving(false);
+      setSubmitting(false);
     }
   };
 
@@ -148,28 +175,127 @@ function LecturerTutoringView() {
     );
   };
 
+  if (profileLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Tutoring" description="Manage your tutoring sessions and availability." />
+      <PageHeader title="Tutoring" description="Apply to become a tutor and manage your tutoring sessions." />
 
-      {/* Sessions Table */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Tutoring Sessions</h2>
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
-          <DataTable<Record<string, unknown>>
-            columns={columns as unknown as ColumnDef<Record<string, unknown>>[]}
-            data={bookings as unknown as Record<string, unknown>[]}
-            searchableFields={["subject"]}
-            searchPlaceholder="Search sessions..."
-            emptyMessage={loadingBookings ? "Loading sessions..." : "No tutoring sessions found."}
-          />
+      {/* ─── Application Section ───────────────────────────────────────────── */}
+      {!hasProfile && !editing ? (
+        /* No application yet — show call to action */
+        <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-soft">
+          <div className="mx-auto max-w-md space-y-4">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+              <Calendar className="h-8 w-8 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Become a Tutor</h2>
+            <p className="text-sm text-muted-foreground">
+              Share your expertise with students by offering tutoring sessions.
+              Submit an application and an admin will review it.
+              Once approved, you'll appear on the public tutoring page.
+            </p>
+            <Button size="lg" onClick={() => setEditing(true)}>
+              Apply to Tutor
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : hasProfile && !editing ? (
+        /* Has profile — show application status and details */
+        <div className="space-y-4">
+          {/* Status Banner */}
+          {approvalStatus === "pending" && (
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+              <p className="font-medium">⏳ Your application is pending review</p>
+              <p className="mt-1 text-xs">An admin will review your application. Once approved, your profile will be visible to students and on the public tutoring page.</p>
+            </div>
+          )}
+          {approvalStatus === "rejected" && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+              <p className="font-medium">❌ Your application was not approved</p>
+              <p className="mt-1 text-xs">You can update your profile and resubmit. Please ensure your bio and subjects are complete.</p>
+            </div>
+          )}
+          {approvalStatus === "approved" && (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+              <p className="font-medium">✅ Your application is approved</p>
+              <p className="mt-1 text-xs">You're visible to students on the public tutoring page. Students can book sessions with you.</p>
+            </div>
+          )}
 
-      {/* Tutoring Settings */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Tutoring Settings</h2>
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+          {/* Application Profile Card */}
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+            <div className="flex items-start justify-between">
+              <h2 className="text-lg font-semibold">Your Tutor Application</h2>
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                Edit Application
+              </Button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-xl border border-border p-4">
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <div className="mt-1">
+                    {approvalStatus === "approved" && (
+                      <Badge className="border-transparent bg-green-100 text-green-800">Approved</Badge>
+                    )}
+                    {approvalStatus === "pending" && (
+                      <Badge className="border-transparent bg-yellow-100 text-yellow-800">Pending</Badge>
+                    )}
+                    {approvalStatus === "rejected" && (
+                      <Badge className="border-transparent bg-red-100 text-red-800">Rejected</Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border p-4">
+                  <p className="text-xs text-muted-foreground">Hourly Rate</p>
+                  <p className="mt-1 font-semibold">{formatUGX(hourlyRate)}/hr</p>
+                </div>
+                <div className="rounded-xl border border-border p-4">
+                  <p className="text-xs text-muted-foreground">Availability</p>
+                  <div className="mt-1">
+                    {isAvailable ? (
+                      <Badge className="border-transparent bg-green-100 text-green-800">Available</Badge>
+                    ) : (
+                      <Badge variant="secondary">Not Available</Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Subjects</p>
+                <div className="flex flex-wrap gap-1">
+                  {subjects.length > 0 ? (
+                    subjects.map((s) => (
+                      <Badge key={s} variant="secondary">{s}</Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm italic text-muted-foreground">No subjects selected</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Bio</p>
+                <p className="text-sm">{bio || <span className="italic text-muted-foreground">No bio provided</span>}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Editing / Creating application form */
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+          <h2 className="text-lg font-semibold mb-4">
+            {hasProfile ? "Edit Your Application" : "Tutor Application Form"}
+          </h2>
           <div className="space-y-6">
             {/* Available for Tutoring Toggle */}
             <div className="flex items-center space-x-2">
@@ -180,32 +306,36 @@ function LecturerTutoringView() {
               />
               <label
                 htmlFor="available-toggle"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                className="text-sm font-medium leading-none"
               >
                 Available for Tutoring
               </label>
             </div>
 
-            {/* Available Subjects */}
+            {/* Subjects */}
             <div className="space-y-3">
-              <Label className="text-sm font-medium">Available Subjects</Label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {availableSubjects.map((subject) => (
-                  <div key={subject} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`subject-${subject}`}
-                      checked={subjects.includes(subject)}
-                      onCheckedChange={() => toggleSubject(subject)}
-                    />
-                    <label
-                      htmlFor={`subject-${subject}`}
-                      className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      {subject}
-                    </label>
-                  </div>
-                ))}
-              </div>
+              <Label className="text-sm font-medium">Subjects you can tutor <span className="text-destructive">*</span></Label>
+              {availableSubjects.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No course units available in the system yet.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {availableSubjects.map((subject) => (
+                    <div key={subject} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`subject-${subject}`}
+                        checked={subjects.includes(subject)}
+                        onCheckedChange={() => toggleSubject(subject)}
+                      />
+                      <label
+                        htmlFor={`subject-${subject}`}
+                        className="text-sm leading-none"
+                      >
+                        {subject}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Hourly Rate */}
@@ -223,25 +353,51 @@ function LecturerTutoringView() {
 
             {/* Bio */}
             <div className="space-y-2">
-              <Label htmlFor="tutor-bio">Bio</Label>
+              <Label htmlFor="tutor-bio">Bio <span className="text-destructive">*</span></Label>
               <Textarea
                 id="tutor-bio"
-                placeholder="Describe your tutoring approach, experience, and what students can expect..."
+                placeholder="Describe your tutoring approach, experience, qualifications, and what students can expect..."
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 rows={4}
               />
+              <p className="text-xs text-muted-foreground">This will be shown to students considering your profile.</p>
             </div>
 
-            {/* Save Button */}
-            <div>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Saving..." : "Save Settings"}
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <Button onClick={handleSubmitApplication} disabled={submitting}>
+                {submitting
+                  ? "Submitting..."
+                  : hasProfile
+                    ? "Update Application"
+                    : "Submit Application"}
               </Button>
+              {hasProfile && (
+                <Button variant="outline" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ─── Tutoring Sessions (only show if profile exists and approved) ──── */}
+      {hasProfile && approvalStatus === "approved" && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Tutoring Sessions</h2>
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
+            <DataTable<Record<string, unknown>>
+              columns={columns as unknown as ColumnDef<Record<string, unknown>>[]}
+              data={bookings as unknown as Record<string, unknown>[]}
+              searchableFields={["subject"]}
+              searchPlaceholder="Search sessions..."
+              emptyMessage={loadingBookings ? "Loading sessions..." : "No tutoring sessions yet."}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { MoreHorizontal, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { api, type ApiCourse, type ApiSchool, type ApiCourseUnit } from "@/lib/api";
+import { resolveImageUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DataTable, type ColumnDef } from "@/components/dashboard/data-table";
@@ -38,10 +40,11 @@ const courseSchema = z.object({
   fee: z.number().min(0, "Fee must be positive"),
   pass_mark: z.number().min(0, "Pass mark must be 0-100").max(100, "Pass mark must be 0-100"),
   status: z.enum(["active", "inactive"]),
+  image_url: z.string().min(1, "Course image URL is required"),
   unit_ids: z.array(z.string()).min(1, "At least one course unit is required"),
 });
 
-type CourseFormData = z.infer<typeof courseSchema>;
+type CourseFormData = z.infer<typeof courseSchema> & { imageFile?: File | null };
 
 const emptyForm: CourseFormData = {
   title: "",
@@ -52,7 +55,9 @@ const emptyForm: CourseFormData = {
   fee: 0,
   pass_mark: 50,
   status: "active",
+  image_url: "",
   unit_ids: [],
+  imageFile: null,
 };
 
 export default function DashboardCourses() {
@@ -68,6 +73,7 @@ export default function DashboardCourses() {
 // ─── Student View ──────────────────────────────────────────────────────────────
 
 function StudentCoursesView() {
+  const navigate = useNavigate();
   const [courses, setCourses] = useState<ApiCourse[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -115,11 +121,12 @@ function StudentCoursesView() {
           {courses.map((course) => (
             <div
               key={course.id}
-              className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft hover:shadow-elegant transition-all"
+              className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft hover:shadow-elegant transition-all cursor-pointer"
+              onClick={() => navigate(`/dashboard/my-courses/${course.id}`)}
             >
               <div className="relative h-40 overflow-hidden bg-muted">
                 <img
-                  src={course.image_url || "/assets/makerere-logo.png"}
+                  src={resolveImageUrl(course.image_url) || "/assets/makerere-logo.png"}
                   alt={course.title}
                   className={`h-full w-full ${course.image_url ? "object-cover" : "object-contain p-8 opacity-30"} group-hover:scale-105 transition-transform duration-500`}
                 />
@@ -154,6 +161,7 @@ function StudentCoursesView() {
 
 function AdminCoursesView() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isSuperAdmin = user.role === "super_admin";
 
   const [courses, setCourses] = useState<ApiCourse[]>([]);
@@ -202,7 +210,18 @@ function AdminCoursesView() {
   };
 
   const columns: ColumnDef<Record<string, unknown>>[] = [
-    { key: "title", header: "Title" },
+    {
+      key: "title",
+      header: "Title",
+      render: (row) => (
+        <button
+          className="text-left font-medium text-primary hover:underline"
+          onClick={() => navigate(`/dashboard/courses/${(row as unknown as ApiCourse).id}`)}
+        >
+          {(row as unknown as ApiCourse).title}
+        </button>
+      ),
+    },
     {
       key: "school_id",
       header: "School",
@@ -259,6 +278,7 @@ function AdminCoursesView() {
       fee: course.fee,
       pass_mark: course.pass_mark,
       status: course.status as "active" | "inactive",
+      image_url: course.image_url || "",
       unit_ids: linkedUnitIds,
     });
     setErrors({});
@@ -271,7 +291,21 @@ function AdminCoursesView() {
   };
 
   const handleSubmit = async () => {
-    const result = courseSchema.safeParse(formData);
+    // If new image file selected, we need to upload it first
+    let imageUrl = formData.image_url;
+
+    // For new courses, require image file; for edits, existing image_url is fine
+    if (formData.imageFile) {
+      // Will upload below
+    } else if (!editingCourse && !formData.image_url) {
+      setErrors({ image_url: "Course image is required" });
+      return;
+    }
+
+    const result = courseSchema.safeParse({
+      ...formData,
+      image_url: formData.imageFile ? "pending_upload" : formData.image_url,
+    });
     if (!result.success) {
       const fieldErrors: Partial<Record<keyof CourseFormData, string>> = {};
       result.error.errors.forEach((err) => {
@@ -284,6 +318,13 @@ function AdminCoursesView() {
 
     try {
       setSubmitting(true);
+
+      // Upload image file if selected
+      if (formData.imageFile) {
+        const uploadResult = await api.uploadImage(formData.imageFile);
+        imageUrl = uploadResult.url;
+      }
+
       if (editingCourse) {
         const updated = await api.updateCourse(editingCourse.id, {
           title: result.data.title,
@@ -294,6 +335,7 @@ function AdminCoursesView() {
           fee: result.data.fee,
           pass_mark: result.data.pass_mark,
           status: result.data.status,
+          image_url: imageUrl,
           unit_ids: result.data.unit_ids,
         });
         setCourses((prev) =>
@@ -310,7 +352,7 @@ function AdminCoursesView() {
           fee: result.data.fee,
           pass_mark: result.data.pass_mark,
           status: result.data.status,
-          image_url: null,
+          image_url: imageUrl,
           unit_ids: result.data.unit_ids,
         });
         setCourses((prev) => [created, ...prev]);
@@ -384,6 +426,9 @@ function AdminCoursesView() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => navigate(`/dashboard/courses/${course.id}`)}>
+                    View
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => openEditForm(course)}>
                     Edit
                   </DropdownMenuItem>
@@ -429,6 +474,35 @@ function AdminCoursesView() {
               onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))}
               placeholder="Course description"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="course-image">Course Image <span className="text-destructive">*</span></Label>
+            <Input
+              id="course-image"
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                if (file) {
+                  setFormData((f) => ({ ...f, imageFile: file, image_url: URL.createObjectURL(file) }));
+                }
+              }}
+            />
+            {formData.image_url && (
+              <div className="mt-2 rounded-lg border overflow-hidden h-32 w-full">
+                <img
+                  src={formData.image_url}
+                  alt="Course preview"
+                  className="h-full w-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              </div>
+            )}
+            {!editingCourse && !formData.image_url && (
+              <p className="text-xs text-muted-foreground">Upload an image for the course (JPEG, PNG, GIF, WebP — max 5MB)</p>
+            )}
+            {errors.image_url && <p className="text-xs text-destructive">{errors.image_url}</p>}
           </div>
 
           <div className="space-y-2">

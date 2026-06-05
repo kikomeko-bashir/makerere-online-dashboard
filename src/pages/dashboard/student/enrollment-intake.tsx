@@ -108,7 +108,7 @@ export default function EnrollmentIntake() {
         title={intake.name}
         description={`Year ${intake.year_level} — Choose a course to enroll in`}
       >
-        <Badge variant="default">{formatUGX(intake.fee)} fee</Badge>
+        <Badge variant="default">Year {intake.year_level}</Badge>
       </PageHeader>
 
       {courses.length === 0 ? (
@@ -151,7 +151,7 @@ export default function EnrollmentIntake() {
         title="Confirm Enrollment"
         description={
           selectedCourse
-            ? `You are about to enroll in "${selectedCourse.title}" under "${intake.name}" (Year ${intake.year_level}). The intake fee is ${formatUGX(intake.fee)}. You will need to complete payment to activate your enrollment.`
+            ? `You are about to enroll in "${selectedCourse.title}" under "${intake.name}" (Year ${intake.year_level}). You will need to complete payment to activate your enrollment.`
             : ""
         }
         confirmLabel={enrolling ? "Enrolling..." : "Confirm Enrollment"}

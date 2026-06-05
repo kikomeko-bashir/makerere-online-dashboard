@@ -66,6 +66,9 @@ const DashboardPayments = React.lazy(
 const DashboardTutoring = React.lazy(
   () => import("@/pages/dashboard/lecturer/tutoring"),
 );
+const DashboardTutorManagement = React.lazy(
+  () => import("@/pages/dashboard/admin/tutor-management"),
+);
 const DashboardNotifications = React.lazy(
   () => import("@/pages/dashboard/lecturer/notifications"),
 );
@@ -76,6 +79,12 @@ const DashboardSettings = React.lazy(
   () => import("@/pages/dashboard/admin/settings"),
 );
 const DashboardAdmins = React.lazy(() => import("@/pages/dashboard/admin/admins"));
+const StudentCourseDetail = React.lazy(
+  () => import("@/pages/dashboard/student/course-detail"),
+);
+const StudentCourseUnitDetail = React.lazy(
+  () => import("@/pages/dashboard/student/course-unit-detail"),
+);
 const DashboardStudent = React.lazy(() => import("@/pages/dashboard/legacy/student"));
 const DashboardTeacher = React.lazy(() => import("@/pages/dashboard/legacy/teacher"));
 const DashboardAdmin = React.lazy(() => import("@/pages/dashboard/legacy/admin"));
@@ -220,7 +229,9 @@ export default function App() {
           <Route index element={<DashboardOverview />} />
           <Route path="schools" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardSchools /></RoleGuard>} />
           <Route path="courses" element={<DashboardCourses />} />
-          <Route path="courses/:courseId" element={<DashboardCourseDetail />} />
+          <Route path="courses/:courseId" element={<RoleGuard allowedRoles={["super_admin", "admin", "lecturer"]}><DashboardCourseDetail /></RoleGuard>} />
+          <Route path="my-courses/:courseId" element={<RoleGuard allowedRoles={["student"]}><StudentCourseDetail /></RoleGuard>} />
+          <Route path="my-courses/:courseId/units/:unitId" element={<RoleGuard allowedRoles={["student"]}><StudentCourseUnitDetail /></RoleGuard>} />
           <Route path="course-units" element={<RoleGuard allowedRoles={["super_admin", "admin", "lecturer"]}><DashboardCourseUnits /></RoleGuard>} />
           <Route path="course-units/:unitId" element={<RoleGuard allowedRoles={["super_admin", "admin", "lecturer"]}><CourseUnitDetail /></RoleGuard>} />
           <Route path="intakes" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardIntakes /></RoleGuard>} />
@@ -237,6 +248,7 @@ export default function App() {
           <Route path="certificates" element={<DashboardCertificates />} />
           <Route path="payments" element={<DashboardPayments />} />
           <Route path="tutoring" element={<RoleGuard allowedRoles={["lecturer", "student"]}><DashboardTutoring /></RoleGuard>} />
+          <Route path="tutor-management" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardTutorManagement /></RoleGuard>} />
           <Route path="notifications" element={<DashboardNotifications />} />
           <Route path="reporting" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><DashboardReporting /></RoleGuard>} />
           <Route path="settings" element={<RoleGuard allowedRoles={["super_admin"]}><DashboardSettings /></RoleGuard>} />

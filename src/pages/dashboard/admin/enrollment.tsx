@@ -234,17 +234,7 @@ function StudentEnrollmentView() {
     }
 
     if (feeRange !== "all") {
-      switch (feeRange) {
-        case "under3m":
-          filtered = filtered.filter((i) => i.fee < 3000000);
-          break;
-        case "3m-5m":
-          filtered = filtered.filter((i) => i.fee >= 3000000 && i.fee <= 5000000);
-          break;
-        case "over5m":
-          filtered = filtered.filter((i) => i.fee > 5000000);
-          break;
-      }
+      // Fee range filter removed — intakes no longer have fees
     }
 
     return filtered;
@@ -418,7 +408,7 @@ function StudentEnrollmentView() {
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <CreditCard className="h-3.5 w-3.5" />
-                    <span>{formatUGX(intake.fee)}</span>
+                    <span>Deadline: {format(new Date(intake.enrollment_deadline), "MMM dd, yyyy")}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Users className="h-3.5 w-3.5" />
